@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/htwr-aachen/backend/internal/configurator"
 	"github.com/htwr-aachen/backend/internal/validation"

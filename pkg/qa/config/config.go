@@ -16,10 +16,9 @@ type Config struct {
 }
 
 type APIConfig struct {
-	PaginationOffsetDefault uint32     `mapstructure:"pagination_offset_default"`
-	PaginationLimitDefault  int        `mapstructure:"pagination_limit_default"`
-	PaginationLimitMax      int        `mapstructure:"pagination_limit_max"`
-	CorsConfig              CorsConfig `mapstructure:"cors"`
+	PaginationLimitDefault int        `mapstructure:"pagination_limit_default"`
+	PaginationLimitMax     int        `mapstructure:"pagination_limit_max"`
+	CorsConfig             CorsConfig `mapstructure:"cors"`
 }
 
 type CorsConfig struct {
@@ -30,7 +29,6 @@ type CorsConfig struct {
 }
 
 func setDefaults(conf *viper.Viper) {
-	conf.SetDefault("api.pagination_offset_default", math.MaxUint32-1)
 	conf.SetDefault("api.pagination_limit_default", 50)
 	conf.SetDefault("api.pagination_limit_max", 150)
 

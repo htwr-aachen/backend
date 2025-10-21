@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -28,7 +29,7 @@ func (h *Handler) GetQuestions(w http.ResponseWriter, r *http.Request) {
 
 	if rDTO.LastId == 0 {
 		log.Debug().Msg("get questions without offset param")
-		rDTO.LastId = h.config.PaginationOffsetDefault
+		rDTO.LastId = math.MaxInt32 - 1
 	}
 
 	if rDTO.Limit == 0 {

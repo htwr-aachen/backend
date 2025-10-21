@@ -1,0 +1,76 @@
+package qa
+
+import (
+	"fmt"
+	"github.com/htwr-aachen/backend/components/templui/button"
+	"github.com/htwr-aachen/backend/components/templui/badge"
+	"time"
+)
+
+type BareQuestionViewModel struct {
+	Id          uint32
+	Approved    bool
+	Title       string
+	Description string
+	CreatedAt   time.Time
+}
+
+// Question renders a single question component with options to approve and delete.
+templ BareQuestion(question BareQuestionViewModel) {
+	{{ qid := fmt.Sprintf("question-%d", question.Id) }}
+	{{ approveURL := templ.URL(fmt.Sprintf("/questions/%d/approve", question.Id)) }}
+	{{ rejectURL := templ.URL(fmt.Sprintf("/questions/%d/reject", question.Id)) }}
+	<div class="question w-full max-w-[100ch] grid lg:grid-cols-[1fr_auto] mx-auto border-1 bg-secondary rounded px-4 py-2" id={ qid } data-question-id={ fmt.Sprintf("%d", question.Id) }>
+		<div>
+			<h3 class="text-lg font-semibold mb-4 inline mr-2">{ question.Title }</h3>
+			if question.Approved {
+				@badge.Badge(badge.Props{
+					Class: "bg-green-600",
+				}) {
+					Approved
+				}
+			} else {
+				@badge.Badge(badge.Props{
+					Variant: badge.VariantDestructive,
+				}) {
+					Unapproved
+				}
+			}
+			if question.Description != "" {
+				<p class="text-gray-700 mb-4">{ question.Description }</p>
+			}
+		</div>
+		<div>
+			<p class="text-sm text-end px-2"># { question.Id } </p>
+			<div class="flex justify-end items-center space-x-4">
+				if !question.Approved {
+					@button.Button(button.Props{
+						Class:    "bg-green-600 hover:bg-green-700",
+						Disabled: question.Approved,
+						Attributes: templ.Attributes{
+							"hx-post":   string(approveURL),
+							"hx-target": fmt.Sprintf("#%v", qid),
+							"hx-swap":   "outerHTML",
+						},
+					}) {
+						if question.Approved {
+							"Approved"
+						} else {
+							"Approve"
+						}
+					}
+				}
+				@button.Button(button.Props{
+					Variant: button.VariantDestructive,
+					Attributes: templ.Attributes{
+						"hx-post":   string(rejectURL),
+						"hx-target": fmt.Sprintf("#%v", qid),
+						"hx-swap":   "outerHTML",
+					},
+				}) {
+					Reject
+				}
+			</div>
+		</div>
+	</div>
+}

@@ -1,0 +1,8 @@
+{
+  "componentsDir": "components/templui",
+  "utilsDir": "utils",
+  "moduleName": "github.com/htwr-aachen/backend",
+  "jsDir": "assets/js",
+  "jsPublicPath": "/assets/js"
+}
+

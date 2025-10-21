@@ -1,0 +1,24 @@
+.answer.approved {
+  border-color: var(--color-green-600);
+}
+.answer.approved::before {
+  background-color: var(--color-green-600);
+}
+.answer {
+  position: relative;
+  border-left: 3px var(--color-destructive) dashed;
+  padding-left: 4em;
+  padding-left: 20px;
+}
+
+.answer::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  background-color: var(--color-destructive);
+  border-radius: 50%;
+}

@@ -1,0 +1,22 @@
+package qa
+
+type QuestionViewModel struct {
+	BareQuestionViewModel
+	Answers []AnswerViewModel
+}
+
+// Question renders a single question component with options to approve and delete.
+templ Question(question QuestionViewModel) {
+	@BareQuestion(BareQuestionViewModel{
+		Id:          question.Id,
+		Approved:    question.Approved,
+		Title:       question.Title,
+		Description: question.Description,
+		CreatedAt:   question.CreatedAt,
+	})
+	<div class="ml-4 flex flex-col py-4">
+		for _, a := range question.Answers {
+			@Answer(a)
+		}
+	</div>
+}

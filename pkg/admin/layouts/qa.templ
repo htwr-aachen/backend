@@ -1,0 +1,65 @@
+package layouts
+
+templ SidebarLink(href templ.SafeURL, content string) {
+	<li>
+		<a
+			class="w-full block text-center bg-stone-200 hover:bg-stone-300 px-2 py-1 rounded"
+			href={ href }
+			hx-get={ string(href) }
+			hx-target="#main-content"
+			hx-swap="innerHTML"
+		>
+			{ content }
+		</a>
+	</li>
+}
+
+templ Sidebar() {
+	<div class="p-8">
+		<h2 class="text-2xl font-semibold mb-2">Menu</h2>
+		<hr class="my-4"/>
+		<ul class="flex flex-col gap-4">
+			// Assuming you'll add an ID to your content div
+			@SidebarLink("/home", "Home")
+			@SidebarLink("/questions", "Unapproved Questions")
+			@SidebarLink("/answers?approved=false", "Unapproved Answers")
+			@SidebarLink("/questions?approved=true", "Approved Questions")
+			@SidebarLink("/answers?approved=true", "Approved Answers")
+		</ul>
+	</div>
+}
+
+templ QAAdminLayout(content templ.Component) {
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>Q&A Admin Panel</title>
+			// Include HTMX
+			<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+			// Add any other CSS or head elements here
+			<link href="/assets/css/output.css" rel="stylesheet"/>
+			<link href="/assets/css/qa.css" rel="stylesheet"/>
+			<style>
+				body {
+					font-family: sans-serif;
+				}
+				.question-item {
+					border-radius: 5px;
+					background-color: #f9f9f9;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="grid grid-cols-[250px_1fr] justify-center h-screen">
+				<aside>
+					@Sidebar()
+				</aside>
+				<div id="main-content" class="max-w-[100ch] h-full p-8">
+					@content
+				</div>
+			</div>
+		</body>
+	</html>
+}

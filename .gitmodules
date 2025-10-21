@@ -1,0 +1,3 @@
+[submodule "subprojects/dbis-scheduling"]
+	path = subprojects/dbis-scheduling
+	url = git@git.rwth-aachen.de:adrian.groh/dbis-scheduling.git

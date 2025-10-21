@@ -1,0 +1,30 @@
+version: "3.8"
+services:
+  backend:
+    build: .
+    restart: always
+    volumes:
+      - ./files/:/etc/files/
+    environment:
+      FILE_PASSWORD: ${FILE_PASSWORD}
+      HOST_FILE_DIR: /etc/files/
+  dbis-scheduling:
+    build: ./subprojects/dbis-scheduling
+    restart: always
+  router:
+    image: caddy:2-alpine
+    restart: always
+    volumes:
+      - ./subprojects/router/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+
+volumes:
+  caddy_data:
+  caddy_config:

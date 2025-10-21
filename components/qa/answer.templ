@@ -1,0 +1,65 @@
+package qa
+
+import (
+	"fmt"
+	"time"
+	"github.com/htwr-aachen/backend/components/templui/button"
+)
+
+type AnswerViewModel struct {
+	Id         uint32
+	QuestionId uint32
+	Answer     string
+	Approved   bool
+	CreatedAt  time.Time
+	KnownSince time.Time
+}
+
+// Answer renders a single answer component with options to approve and delete.
+templ Answer(answer AnswerViewModel) {
+	{{
+		aid := fmt.Sprintf("answer-%d", answer.Id)
+		approveURL := templ.URL(fmt.Sprintf("/answers/%d/approve", answer.Id))
+		deleteURL := templ.URL(fmt.Sprintf("/answers/%d", answer.Id))
+	}}
+	<div
+		class={ "answer w-full border-l-2 pl-4 py-2 border-dashed relative", templ.KV("approved", answer.Approved) }
+		id={ aid }
+		data-question-id={ fmt.Sprintf("%d", answer.QuestionId) }
+		data-answer-id={ fmt.Sprintf("%d", answer.Id) }
+	>
+		<div class="bg-secondary rounded px-4 py-2 grid grid-cols-[1fr_auto]">
+			<p class="text-gray-700 mb-4">{ answer.Answer }</p>
+			<div>
+				<p class="text-sm text-end px-2"># { answer.Id }</p>
+				<div class="flex justify-end items-center space-x-4">
+					@button.Button(button.Props{
+						Class:    "bg-green-600 hover:bg-green-700",
+						Disabled: answer.Approved,
+						Attributes: templ.Attributes{
+							"hx-post":   string(approveURL),
+							"hx-swap":   "outerHTML",
+							"hx-target": fmt.Sprintf("#%s", aid),
+						},
+					}) {
+						if answer.Approved {
+							"Approved"
+						} else {
+							"Approve"
+						}
+					}
+					@button.Button(button.Props{
+						Variant: button.VariantDestructive,
+						Attributes: templ.Attributes{
+							"hx-delete": string(deleteURL),
+							"hx-target": fmt.Sprintf("#%s", aid),
+							"hx-swap":   "outerHTML",
+						},
+					}) {
+						Delete
+					}
+				</div>
+			</div>
+		</div>
+	</div>
+}

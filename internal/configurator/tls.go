@@ -32,7 +32,7 @@ type ConnectionTLSConfig struct {
 
 type GlobalTLSConfig struct {
 	baseConfig
-	TrustBundle string `mapstructure:"trust_bundle" validate:"omitempty,file"`
+	TrustBundle []string `mapstructure:"trust_bundle" validate:"omitempty,file"`
 }
 
 func ParseTLSVersion(versionStr string) (uint16, error) {
@@ -104,15 +104,18 @@ func MergeFromGlobalConfig(cfg *GlobalTLSConfig, tlsConfig *tls.Config) error {
 	mergeFromConfig(&cfg.baseConfig, tlsConfig)
 
 	// Handle custom certificate chain
-	if cfg.TrustBundle != "" {
-		caCert, err := os.ReadFile(cfg.TrustBundle)
-		if err != nil {
-			return fmt.Errorf("reading TLS certificate from trust bundle '%s': %w", cfg.TrustBundle, err)
-		}
-
+	if len(cfg.TrustBundle) > 0 {
 		caCertPool := x509.NewCertPool()
-		if !caCertPool.AppendCertsFromPEM(caCert) {
-			return fmt.Errorf("failed to parse TLS certificate from trust bundle '%s'", cfg.TrustBundle)
+
+		for _, bundlePath := range cfg.TrustBundle {
+			caCert, err := os.ReadFile(bundlePath)
+			if err != nil {
+				return fmt.Errorf("reading TLS certificate from trust bundle '%s': %w", cfg.TrustBundle, err)
+			}
+
+			if !caCertPool.AppendCertsFromPEM(caCert) {
+				return fmt.Errorf("failed to parse TLS certificate from trust bundle '%s'", cfg.TrustBundle)
+			}
 		}
 
 		tlsConfig.RootCAs = caCertPool

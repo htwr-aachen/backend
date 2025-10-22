@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/htwr-aachen/backend/internal/liveness"
 	"github.com/htwr-aachen/backend/pkg/admin"
 	"github.com/htwr-aachen/backend/pkg/panikzettel"
 	"github.com/htwr-aachen/backend/pkg/qa"
@@ -95,6 +96,7 @@ type Server struct {
 
 // Services holds all initialized service handlers
 type Services struct {
+	Liveness    *liveness.Server
 	QA          http.Handler
 	Panikzettel http.Handler
 	Admin       http.Handler
@@ -249,6 +251,9 @@ func (s *Server) Run(ctx context.Context, conf *viper.Viper) error {
 
 func (s *Server) initializeServices(ctx context.Context, conf *viper.Viper) (*Services, error) {
 	services := &Services{}
+
+	services.Liveness = liveness.NewLivenessServer(nil)
+	services.closers = append(services.closers, services.Liveness.Close)
 
 	// Init QA subsystem
 	if s.config.QAEnabled {

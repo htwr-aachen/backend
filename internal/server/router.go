@@ -31,5 +31,7 @@ func (s *Server) setupAdminRouter() *http.ServeMux {
 func (s *Server) setupMetricsRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.Handle("/metrics", promhttp.Handler())
+	r.HandleFunc("/livez", s.services.Liveness.LivezHandler)
+	r.HandleFunc("/readyz", s.services.Liveness.ReadyzHandler)
 	return r
 }

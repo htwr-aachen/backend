@@ -32,7 +32,7 @@ type ConnectionTLSConfig struct {
 
 type GlobalTLSConfig struct {
 	baseConfig
-	TrustBundle []string `mapstructure:"trust_bundle" validate:"omitempty,file"`
+	TrustBundle []string `mapstructure:"trust_bundle" validate:"omitempty"`
 }
 
 func ParseTLSVersion(versionStr string) (uint16, error) {

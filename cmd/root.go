@@ -72,7 +72,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default searches for htwr-backend.yaml in current dir, ./config, $XDG_CONFIG_HOME/htwr-backend, /etc/htwr-backend)")
 
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "", "logging level (panic, fatal, error, warn, info, debug, trace)")
-	_ = conf.BindPFlag("LogLevel", rootCmd.PersistentFlags().Lookup("log-level"))
+	_ = conf.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
 
 }
 
@@ -90,7 +90,7 @@ func initConfig() {
 		conf.AddConfigPath("/etc/htwr-backend")
 	}
 
-	conf.SetDefault("LogLevel", "Trace")
+	conf.SetDefault("log_level", "Trace")
 
 	conf.SetEnvPrefix("HTWR_BACKEND")
 	conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))

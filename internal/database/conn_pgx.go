@@ -19,6 +19,7 @@ func New(config *DBConfig) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(config.DBConnStr)
 	if err != nil {
 		log.Err(err).Msg("parsing postgres config")
+		return nil, fmt.Errorf("parsing database config: %w", err)
 	}
 
 	if config.dbSetConfig {
@@ -44,8 +45,8 @@ func New(config *DBConfig) (*pgxpool.Pool, error) {
 	err = pool.Ping(ctx)
 	cancel()
 	if err != nil {
-		log.Err(err).Msg("Database connection not health")
-		return nil, err
+		log.Err(err).Msg("Database connection not healthy")
+		return nil, fmt.Errorf("database connection not healthy: %w", err)
 	}
 
 	log.Info().Msg("DB applying migrations")

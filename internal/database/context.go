@@ -16,12 +16,13 @@ func CreateAndAttach(parent context.Context, conf *viper.Viper) (context.Context
 		log.Panic().Stack().Msg("nil conf given")
 	}
 	config, err := LoadDBConfig(parent, conf)
-	if err != nil {
+	if config == nil || err != nil {
 		return parent, fmt.Errorf("loading database configuration: %w", err)
 	}
 
 	pool, err := New(config)
 	if err != nil {
+		log.Info().Err(err).Msg("creating database connection pool")
 		return parent, fmt.Errorf("creating database pool: %w", err)
 	}
 

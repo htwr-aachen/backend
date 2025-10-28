@@ -105,6 +105,10 @@ func initConfig() {
 		}
 	}
 
+	if conf.ConfigFileUsed() != "" {
+		log.Info().Str("used_config_file", conf.ConfigFileUsed()).Send()
+	}
+
 	zerolog.SetGlobalLevel(parseLogLevel(conf.GetString("LogLevel")))
 }
 

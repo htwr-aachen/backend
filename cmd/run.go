@@ -5,7 +5,7 @@ package cmd
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -58,27 +58,28 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		server, err := server.New(conf)
 		if err != nil {
-			log.Err(err).Msg("validating configuration")
+			log.Error().Err(err).Msg("validating configuration")
 			return err
 		}
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
 		ctx, err = configurator.LoadAndAttach(ctx, conf)
 		if err != nil {
-			log.Err(err).Msg("loading global configuration")
-			return errors.New("could not load global configuration")
+			log.Error().Err(err).Msg("loading global configuration")
+			return fmt.Errorf("could not load global configuration: %w", err)
 		}
 		ctx, err = database.CreateAndAttach(ctx, conf)
 		if err != nil {
-			log.Err(err).Msg("creating database connection pool")
-			return errors.New("could not connect to database")
+			log.Error().Err(err).Msg("creating database connection pool")
+
+			return fmt.Errorf("could not connect to database %w", err)
 		}
 
 		defer cancel()
 		defer database.Close()
 		err = server.Run(ctx, conf)
 		if err != nil {
-			log.Err(err).Msg("running application")
+			log.Error().Err(err).Msg("running application")
 			return err
 		}
 

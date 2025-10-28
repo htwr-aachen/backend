@@ -15,7 +15,7 @@ import (
 )
 
 type DBConfig struct {
-	DBConnStr     string `mapstructure:"connection_string" validate:"url"`
+	DBConnStr     string `mapstructure:"connection_string" validate:"required"`
 	DBConnStrFile string `mapstructure:"connection_string_file"`
 
 	DBHost         string `mapstructure:"host" validate:"omitempty,hostname"`

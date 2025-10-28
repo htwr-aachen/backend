@@ -4,6 +4,7 @@ Copyright © 2025 Jonas Schneider jonas.max.schneider@gmail.com
 package cmd
 
 import (
+	"errors"
 	"os"
 	"strings"
 
@@ -81,7 +82,6 @@ func initConfig() {
 	if configFile != "" {
 		conf.SetConfigFile(configFile)
 	} else {
-		conf.SetConfigType("yaml")
 		conf.SetConfigName("htwr-backend")
 		conf.AddConfigPath(".")
 		conf.AddConfigPath("./config")
@@ -95,8 +95,15 @@ func initConfig() {
 	conf.AutomaticEnv()
 
 	if err := conf.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		log.Info().Str("used_config_file", conf.ConfigFileUsed()).Send()
+		var configFileNotFoundError viper.ConfigFileNotFoundError
+		var configParseError viper.ConfigParseError
+
+		if errors.As(err, &configFileNotFoundError) {
 			log.Info().Msg("no config file found")
+		} else if errors.As(err, &configParseError) {
+			log.Err(err).Msg("could not parse config file... Aborting")
+			cobra.CheckErr(err)
 		} else {
 			log.Err(err).Msg("could not load config file... Aborting")
 			cobra.CheckErr(err)

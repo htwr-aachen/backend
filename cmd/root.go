@@ -66,18 +66,17 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	initConfig()
-
 	cobra.OnInitialize(initValidation)
 
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default searches for htwr-backend.yaml in current dir, ./config, $XDG_CONFIG_HOME/htwr-backend, /etc/htwr-backend)")
 
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "", "logging level (panic, fatal, error, warn, info, debug, trace)")
-	_ = conf.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
 
 }
 
 func initConfig() {
 	conf = viper.New()
+	_ = conf.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
 
 	if configFile != "" {
 		conf.SetConfigFile(configFile)
@@ -86,7 +85,6 @@ func initConfig() {
 		conf.SetConfigName("htwr-backend")
 		conf.AddConfigPath(".")
 		conf.AddConfigPath("./config")
-		conf.AddConfigPath("$XDG_CONFIG_HOME/htwr-backend")
 		conf.AddConfigPath("/etc/htwr-backend")
 	}
 
@@ -109,7 +107,7 @@ func initConfig() {
 		log.Info().Str("used_config_file", conf.ConfigFileUsed()).Send()
 	}
 
-	zerolog.SetGlobalLevel(parseLogLevel(conf.GetString("LogLevel")))
+	zerolog.SetGlobalLevel(parseLogLevel(conf.GetString("log_level")))
 }
 
 func initValidation() {

@@ -57,22 +57,22 @@ func New(cfg *config.Config, bucket *blob.Bucket) *PanikzettelDB {
 func (db *PanikzettelDB) GetPanikzettelMeta(ctx context.Context) ([]models.PanikzettelMeta, error) {
 
 	panikzettelMetadataDownloads.Inc()
-	cached, found := db.cache.Get(db.cfg.MetadataFile)
+	cached, found := db.cache.Get(db.cfg.MetadataFilename)
 	if found {
 		if metas, ok := cached.([]models.PanikzettelMeta); ok {
 			return metas, nil
 		}
 		// Invalid cache entry, remove it
-		db.cache.Delete(db.cfg.MetadataFile)
+		db.cache.Delete(db.cfg.MetadataFilename)
 		log.Warn().Msg("Invalid cache entry found for metadata, clearing cache")
 	}
 
 	log.Debug().Msg("Refreshing panikzettel cache")
 
-	reader, err := db.bucket.NewReader(ctx, db.cfg.MetadataFile, nil)
+	reader, err := db.bucket.NewReader(ctx, db.cfg.MetadataFilename, nil)
 	if err != nil {
 		panikzettelMetadataRefreshes.With(prometheus.Labels{"outcome": "error"}).Inc()
-		return nil, fmt.Errorf("metadata file '%s' not accessible: %w", db.cfg.MetadataFile, err)
+		return nil, fmt.Errorf("metadata file '%s' not accessible: %w", db.cfg.MetadataFilename, err)
 	}
 	defer func() {
 		if closeErr := reader.Close(); closeErr != nil {
@@ -118,7 +118,7 @@ func (db *PanikzettelDB) GetPanikzettelMeta(ctx context.Context) ([]models.Panik
 		metas = append(metas, meta)
 	}
 
-	db.cache.Set(db.cfg.MetadataFile, metas, cache.DefaultExpiration)
+	db.cache.Set(db.cfg.MetadataFilename, metas, cache.DefaultExpiration)
 	log.Debug().Int("count", len(metas)).Msg("Loaded Panikzettel metadata")
 
 	panikzettelMetadataRefreshes.With(prometheus.Labels{"outcome": "success"}).Inc()
@@ -147,7 +147,7 @@ func (db *PanikzettelDB) GetPanikzettel(ctx context.Context, name string) (*mode
 		return nil, &models.PanikzettelEmptyNameError{}
 	}
 
-	if name == db.cfg.MetadataFile {
+	if name == db.cfg.MetadataFilename {
 		panikzettelDownloadsVec.With(prometheus.Labels{"panikzettel_name": name, "outcome": "error"}).Inc()
 		return nil, &models.PanikzettelReservedFilenameError{Name: name}
 	}

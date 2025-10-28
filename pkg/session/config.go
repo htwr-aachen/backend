@@ -20,6 +20,7 @@ type SessionConfig struct {
 	Providers            map[string]Provider  `mapstructure:"providers" validate:"required,min=1,dive"`
 
 	SessionCookieName     string `mapstructure:"cookie_name" validate:"required"`
+	SessionCookieNameFile string `mapstructure:"cookie_name_file"`
 	SessionCookieSecure   bool   `mapstructure:"cookie_secure"`
 	SessionCookieHttpOnly bool   `mapstructure:"cookie_http_only"`
 	SessionCookieSameSite string `mapstructure:"cookie_same_site"`
@@ -28,8 +29,10 @@ type SessionConfig struct {
 
 	RoleMap map[string]string `mapstructure:"role_map"`
 
-	AuthURLPrefix string `mapstructure:"auth_url_prefix" validate:"uri"`
-	AuthLoginURL  string `mapstructure:"auth_login_url" validate:"uri"`
+	AuthURLPrefix     string `mapstructure:"auth_url_prefix" validate:"uri"`
+	AuthURLPrefixFile string `mapstructure:"auth_url_prefix_file"`
+	AuthLoginURL      string `mapstructure:"auth_login_url" validate:"uri"`
+	AuthLoginURLFile  string `mapstructure:"auth_login_url_file"`
 }
 
 type SessionUsageConfig struct {
@@ -37,13 +40,18 @@ type SessionUsageConfig struct {
 }
 
 type Provider struct {
-	Name         string   `mapstructure:"name" validate:"required"`
-	Issuer       string   `mapstructure:"issuer" validate:"required"`
-	ClientId     string   `mapstructure:"client_id" validate:"required"`
-	ClientSecret string   `mapstructure:"client_secret" validate:"required"`
-	Endpoint     string   `mapstructure:"endpoint" validate:"required,url"`
-	RedirectURL  string   `mapstructure:"redirect_url" validate:"required,url"`
-	Scopes       []string `mapstructure:"scopes" validate:"min=1"`
+	Name             string   `mapstructure:"name" validate:"required"`
+	Issuer           string   `mapstructure:"issuer" validate:"required"`
+	IssuerFile       string   `mapstructure:"issuer_file"`
+	ClientId         string   `mapstructure:"client_id" validate:"required"`
+	ClientIdFile     string   `mapstructure:"client_id_file"`
+	ClientSecret     string   `mapstructure:"client_secret" validate:"required"`
+	ClientSecretFile string   `mapstructure:"client_secret_file"`
+	Endpoint         string   `mapstructure:"endpoint" validate:"required,url"`
+	EndpointFile     string   `mapstructure:"endpoint_file"`
+	RedirectURL      string   `mapstructure:"redirect_url" validate:"required,url"`
+	RedirectURLFile  string   `mapstructure:"redirect_url_file"`
+	Scopes           []string `mapstructure:"scopes" validate:"min=1"`
 }
 
 func setDefaults(conf *viper.Viper) {

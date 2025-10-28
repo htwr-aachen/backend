@@ -40,7 +40,9 @@ type CloudConfig struct {
 
 type Config struct {
 	BaseURL              string               `mapstructure:"base_url"`
-	MetadataFile         string               `mapstructure:"metadata_file"`
+	BaseURLFile          string               `mapstructure:"base_url_file"`
+	MetadataFilename     string               `mapstructure:"metadata_filename"`
+	MetadataFilenameFile string               `mapstructure:"metadata_filename_file"`
 	MaxFileSize          int64                `mapstructure:"max_file_size"`
 	CacheDuration        time.Duration        `mapstructure:"cache_duration"`
 	CacheCleanupInterval time.Duration        `mapstructure:"cache_cleanup_interval" validate:"omitempty"`
@@ -50,7 +52,7 @@ type Config struct {
 
 func setDefaults(conf *viper.Viper) {
 	conf.SetDefault("base_url", "/api/panikzettel")
-	conf.SetDefault("metadata_file", "metadata.json")
+	conf.SetDefault("metadata_filename", "metadata.json")
 	conf.SetDefault("cache_duration", time.Hour*6)
 	conf.SetDefault("max_file_size", 512*1024*1024) // 512MB
 

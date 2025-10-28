@@ -27,7 +27,7 @@ RUN apk update \
     && addgroup -g 1001 -S appgroup \
     && adduser -u 1001 -S appuser -G appgroup
 
-RUN mkdir -p /app && \ chown -R appuser:appgroup /app
+RUN mkdir -p /app && chown -R appuser:appgroup /app
 
 WORKDIR /app
 

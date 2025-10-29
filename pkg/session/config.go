@@ -15,6 +15,7 @@ import (
 
 type SessionConfig struct {
 	GlobalConfig         *configurator.Global `mapstructure:"-"`
+	Disabled             bool                 `mapstructure:"disabled"`
 	CacheExpiration      time.Duration        `mapstructure:"cache_expiration" validate:"required"`
 	CacheCleanupInterval time.Duration        `mapstructure:"cache_cleanup_interval" validate:"required"`
 	Providers            map[string]Provider  `mapstructure:"providers" validate:"required,min=1,dive"`
@@ -87,6 +88,10 @@ func LoadConfig(ctx context.Context, parentConf *viper.Viper, useConf *SessionUs
 	var ok bool
 	if config.GlobalConfig, ok = configurator.FromContext(ctx); !ok {
 		return nil, fmt.Errorf("no global config in context")
+	}
+
+	if config.Disabled {
+		return config, nil
 	}
 
 	if config.Providers == nil {

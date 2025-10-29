@@ -19,7 +19,7 @@ type oidcProviderConfig struct {
 }
 
 type SessionSubsystem struct {
-	db         DB
+	db         *DB
 	config     SessionConfig
 	oidcConfig []oidcProviderConfig
 	mux        *http.ServeMux
@@ -32,6 +32,14 @@ func New(ctx context.Context, conf *viper.Viper, parentConfig *SessionUsageConfi
 		return nil, err
 	}
 
+	if config.Disabled {
+		return &SessionSubsystem{
+			db:         nil,
+			config:     *config,
+			oidcConfig: nil,
+		}, nil
+	}
+
 	db, err := newSessionDB(ctx, *config)
 	if err != nil {
 		log.Err(err).Msg("creating session db")
@@ -39,7 +47,8 @@ func New(ctx context.Context, conf *viper.Viper, parentConfig *SessionUsageConfi
 	}
 
 	subsystem := SessionSubsystem{
-		db:         *db,
+		db: db,
+
 		config:     *config,
 		oidcConfig: make([]oidcProviderConfig, 0, len(config.Providers)),
 	}

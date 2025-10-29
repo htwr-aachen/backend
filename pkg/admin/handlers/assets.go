@@ -16,10 +16,13 @@ type AdminAssetsHandler struct {
 func NewAssets() *AdminAssetsHandler {
 	h := &AdminAssetsHandler{}
 
+	assets.Init()
+
 	h.isDevelopment = os.Getenv("GO_ENV") != "production"
 	if h.isDevelopment {
 		log.Info().Msg("using directory asset fs")
-		h.fileServer = assets.AssetFS
+		//h.fileServer = assets.AssetFS
+		h.fileServer = assets.EmbeddedFS
 	} else {
 		log.Info().Msg("using embedded asset fs")
 		h.fileServer = assets.EmbeddedFS

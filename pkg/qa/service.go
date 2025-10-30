@@ -61,18 +61,7 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 
 	// TODO: answer scrolling
 
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization", "Cookie"},
-		ExposedHeaders:   []string{"Content-Length"},
-		AllowCredentials: true, // You have cookies, so this should be true
-		Debug:            true,
-		MaxAge:           300,
-	})
-
-	// Apply CORS first, then other middleware
-	handler := c.Handler(middlewarestd.Handler("", mdlw, r))
+	handler := middlewarestd.Handler("", mdlw, r)
 	handler = httputils.LogMiddleware(handler)
 
 	return handler, service.Close, nil

@@ -9,7 +9,11 @@ import (
 	"github.com/htwr-aachen/backend/pkg/panikzettel/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/handlers"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/service"
+	"github.com/rs/cors"
 	"github.com/rs/zerolog/log"
+	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
+	"github.com/slok/go-http-metrics/middleware"
+	middlewarestd "github.com/slok/go-http-metrics/middleware/std"
 	"github.com/spf13/viper"
 	"gocloud.dev/blob"
 )
@@ -30,6 +34,11 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 		return nil, nil, fmt.Errorf("validating panikzettel service: %w", err)
 	}
 
+	mdlw := middleware.New(middleware.Config{
+		Recorder: metrics.NewRecorder(metrics.Config{}),
+		Service:  "htwr-qa",
+	})
+
 	var cloudClient CloudClient
 	switch cfg.CloudConfig.Provider {
 	case config.CloudProviderGoogle:
@@ -42,13 +51,15 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 	}
 
 	db := service.New(cfg, cloudClient.Bucket())
-	handler := handlers.NewPanikzettel(db)
+	panikHandler := handlers.NewPanikzettel(db)
 	r := http.NewServeMux()
-	r.HandleFunc("GET /", handler.GetPanikzettelMeta)
-	r.HandleFunc("GET /{filename}", handler.GetPanikzettel)
+	r.HandleFunc("GET /", panikHandler.GetPanikzettelMeta)
+	r.HandleFunc("GET /{filename}", panikHandler.GetPanikzettel)
+
+	handler := middlewarestd.Handler("", mdlw, r)
 
 	closer := func() {
 		cloudClient.Close()
 	}
-	return r, closer, nil
+	return handler, closer, nil
 }

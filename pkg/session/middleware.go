@@ -26,7 +26,8 @@ func (s *SessionSubsystem) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.config.Disabled {
 			log.Trace().Str("path", r.URL.Path).Msg("auth middleware disabled")
-			next.ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), userContextKey, GetTestUser())
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		if r.URL.Path == s.config.AuthLoginURL {

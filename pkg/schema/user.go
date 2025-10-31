@@ -12,7 +12,7 @@ type User struct {
 	Name             string    `json:"name"`
 	Role             UserRole  `json:"role"`
 	Email            string    `json:"email" validate:"required,email"`
-	AvatarURL        string    `json:"avatar_url" validate:"url"`
+	AvatarURL        string    `json:"avatar_url" validate:"omitempty,url"`
 	IdentityProvider string    `json:"identity_provider"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`

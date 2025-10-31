@@ -39,6 +39,7 @@ type CloudConfig struct {
 }
 
 type Config struct {
+	GlobalConfig         *configurator.Global `mapstructure:"-"`
 	BaseURL              string               `mapstructure:"base_url"`
 	BaseURLFile          string               `mapstructure:"base_url_file"`
 	MetadataFilename     string               `mapstructure:"metadata_filename"`
@@ -47,7 +48,6 @@ type Config struct {
 	CacheDuration        time.Duration        `mapstructure:"cache_duration"`
 	CacheCleanupInterval time.Duration        `mapstructure:"cache_cleanup_interval" validate:"omitempty"`
 	CloudConfig          CloudConfig          `mapstructure:"cloud"`
-	GlobalConfig         *configurator.Global `mapstructure:"-"`
 }
 
 func setDefaults(conf *viper.Viper) {

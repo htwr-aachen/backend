@@ -9,7 +9,8 @@ import (
 )
 
 type Global struct {
-	TLS GlobalTLSConfig `mapstructure:"tls"`
+	TLS         GlobalTLSConfig `mapstructure:"tls"`
+	InsecureDev bool            `mapstructure:"insecure_dev"`
 }
 
 type contextKey struct{}

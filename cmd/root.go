@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	configFile string
-	logLevel   string
-	conf       *viper.Viper
+	configFile  string
+	logLevel    string
+	development bool
+	conf        *viper.Viper
 )
 
 const LevelDocs = "(panic, fatal, error, warn, debug, trace)"
@@ -73,11 +74,14 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "", "logging level (panic, fatal, error, warn, info, debug, trace)")
 
+	rootCmd.PersistentFlags().BoolVar(&development, "insecure-dev", false, "Activate insecure development mode")
+
 }
 
 func initConfig() {
 	conf = viper.New()
 	_ = conf.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
+	_ = conf.BindPFlag("global.insecure_dev", rootCmd.PersistentFlags().Lookup("insecure-dev"))
 
 	if configFile != "" {
 		conf.SetConfigFile(configFile)

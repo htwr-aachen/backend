@@ -62,6 +62,10 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 	// TODO: answer scrolling
 
 	handler := middlewarestd.Handler("", mdlw, r)
+	if config.GlobalConfig.InsecureDev {
+		c := cors.AllowAll()
+		handler = c.Handler(handler)
+	}
 	handler = httputils.LogMiddleware(handler)
 
 	return handler, service.Close, nil

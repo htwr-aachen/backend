@@ -5,10 +5,27 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/htwr-aachen/backend/pkg/schema"
 )
+
+func GetTestUser() *schema.User {
+	return &schema.User{
+
+		Id:               "7caf4f5e-85f5-4dd8-aa5b-966336fe6d04",
+		IssSubHash:       "fe",
+		Username:         "test_user",
+		Name:             "test user",
+		Role:             schema.ROLE_ADMIN,
+		Email:            "test_user@exampl.com",
+		AvatarURL:        "https://en.wikipedia.org/wiki/File:Minion_sculpture_in_Brisbane,_2024.jpg",
+		IdentityProvider: "test",
+		CreatedAt:        time.Time{},
+		UpdatedAt:        time.Time{},
+	}
+}
 
 func (db *DB) GetUserByIssSubHash(ctx context.Context, iss string, sub string) (*schema.User, error) {
 	issSubHash := getIssSubHash(iss, sub)

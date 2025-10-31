@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/htwr-aachen/backend/internal/httputils"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/cloud"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/handlers"
@@ -57,6 +58,11 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 	r.HandleFunc("GET /{filename}", panikHandler.GetPanikzettel)
 
 	handler := middlewarestd.Handler("", mdlw, r)
+	if cfg.GlobalConfig.InsecureDev {
+		c := cors.AllowAll()
+		handler = c.Handler(handler)
+	}
+	handler = httputils.LogMiddleware(handler)
 
 	closer := func() {
 		cloudClient.Close()

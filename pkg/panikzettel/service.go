@@ -37,7 +37,7 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 
 	mdlw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  "htwr-qa",
+		Service:  "htwr-panikzettel",
 	})
 
 	var cloudClient CloudClient

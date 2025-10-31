@@ -10,8 +10,9 @@ import (
 )
 
 type Config struct {
-	GlobalConfig *configurator.Global `mapstructure:"-"`
-	APIConfig    APIConfig            `mapstructure:"api"`
+	GlobalConfig *configurator.Global        `mapstructure:"-"`
+	Metrics      *configurator.MetricsConfig `mapstructure:"metrics"`
+	APIConfig    APIConfig                   `mapstructure:"api"`
 }
 
 type APIConfig struct {
@@ -35,6 +36,8 @@ func setDefaults(conf *viper.Viper) {
 	conf.SetDefault("api.cors.allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
 	conf.SetDefault("api.cors.allowed_headers", []string{"Accept", "Content-Type", "Authorization"})
 	conf.SetDefault("api.cors.allow_credentials", false)
+
+	conf.SetDefault("metrics.enabled", true)
 }
 
 func Load(ctx context.Context, parentConf *viper.Viper) (*Config, error) {

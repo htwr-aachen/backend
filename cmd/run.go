@@ -12,6 +12,7 @@ import (
 
 	"github.com/htwr-aachen/backend/internal/configurator"
 	"github.com/htwr-aachen/backend/internal/database"
+	"github.com/htwr-aachen/backend/internal/metrics"
 	"github.com/htwr-aachen/backend/internal/server"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -68,6 +69,13 @@ Examples:
 			log.Error().Err(err).Msg("loading global configuration")
 			return fmt.Errorf("could not load global configuration: %w", err)
 		}
+
+		ctx, err = metrics.CreateAndAttach(ctx, conf)
+		if err != nil {
+			log.Error().Err(err).Msg("creating metrics recorder")
+			return fmt.Errorf("could not create metrics recorder: %w", err)
+		}
+
 		ctx, err = database.CreateAndAttach(ctx, conf)
 		if err != nil {
 			log.Error().Err(err).Msg("creating database connection pool")

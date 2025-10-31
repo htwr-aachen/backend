@@ -39,15 +39,16 @@ type CloudConfig struct {
 }
 
 type Config struct {
-	GlobalConfig         *configurator.Global `mapstructure:"-"`
-	BaseURL              string               `mapstructure:"base_url"`
-	BaseURLFile          string               `mapstructure:"base_url_file"`
-	MetadataFilename     string               `mapstructure:"metadata_filename"`
-	MetadataFilenameFile string               `mapstructure:"metadata_filename_file"`
-	MaxFileSize          int64                `mapstructure:"max_file_size"`
-	CacheDuration        time.Duration        `mapstructure:"cache_duration"`
-	CacheCleanupInterval time.Duration        `mapstructure:"cache_cleanup_interval" validate:"omitempty"`
-	CloudConfig          CloudConfig          `mapstructure:"cloud"`
+	GlobalConfig         *configurator.Global        `mapstructure:"-"`
+	Metrics              *configurator.MetricsConfig `mapstructure:"metrics"`
+	BaseURL              string                      `mapstructure:"base_url"`
+	BaseURLFile          string                      `mapstructure:"base_url_file"`
+	MetadataFilename     string                      `mapstructure:"metadata_filename"`
+	MetadataFilenameFile string                      `mapstructure:"metadata_filename_file"`
+	MaxFileSize          int64                       `mapstructure:"max_file_size"`
+	CacheDuration        time.Duration               `mapstructure:"cache_duration"`
+	CacheCleanupInterval time.Duration               `mapstructure:"cache_cleanup_interval" validate:"omitempty"`
+	CloudConfig          CloudConfig                 `mapstructure:"cloud"`
 }
 
 func setDefaults(conf *viper.Viper) {
@@ -58,6 +59,8 @@ func setDefaults(conf *viper.Viper) {
 
 	conf.SetDefault("cloud.provider", "aws")
 	conf.SetDefault("cloud.auth_method", "default")
+
+	conf.SetDefault("metrics.enabled", true)
 }
 
 func LoadConfig(ctx context.Context, parentConf *viper.Viper) (*Config, error) {

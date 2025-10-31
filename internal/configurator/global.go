@@ -11,15 +11,23 @@ import (
 type Global struct {
 	TLS         GlobalTLSConfig `mapstructure:"tls"`
 	InsecureDev bool            `mapstructure:"insecure_dev"`
+	Metrics     MetricsConfig   `mapstructure:"metrics"`
 }
 
 type contextKey struct{}
+
+func setDefaults(conf *viper.Viper) {
+	conf.SetDefault("metrics.prefix", "")
+	conf.SetDefault("metrics.enabled", true)
+}
 
 func LoadAndAttach(parent context.Context, parentConf *viper.Viper) (context.Context, error) {
 	conf := parentConf.Sub("global")
 	if conf == nil {
 		conf = viper.New()
 	}
+
+	setDefaults(conf)
 
 	config := Global{}
 	if err := UnmarshalWithFileResolution(conf, &config); err != nil {

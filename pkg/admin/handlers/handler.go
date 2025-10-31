@@ -5,8 +5,13 @@ import (
 	"net/http"
 
 	"github.com/htwr-aachen/backend/internal/httputils"
+	"github.com/htwr-aachen/backend/internal/metrics"
+	"github.com/htwr-aachen/backend/pkg/admin/config"
 	qaschema "github.com/htwr-aachen/backend/pkg/qa/schema"
 	"github.com/htwr-aachen/backend/pkg/schema"
+	"github.com/rs/zerolog/log"
+	"github.com/slok/go-http-metrics/middleware"
+	middlewarestd "github.com/slok/go-http-metrics/middleware/std"
 )
 
 type QADB interface {
@@ -50,7 +55,7 @@ type AdminHandler struct {
 	qadb     QADB
 }
 
-func New(qadb QADB, sessions SessionProvider) *AdminHandler {
+func New(ctx context.Context, cfg *config.Admin, qadb QADB, sessions SessionProvider) *AdminHandler {
 	h := &AdminHandler{
 		qadb:     qadb,
 		sessions: sessions,
@@ -83,7 +88,23 @@ func New(qadb QADB, sessions SessionProvider) *AdminHandler {
 	router.HandleFunc("DELETE /answers/{id}", h.DeleteAnswer)
 	//
 	h.router = router
-	h.handler = httputils.LogMiddleware(sessions.AuthMiddleware(router))
+
+	var handler http.Handler
+	handler = h.router
+	if recorder, ok := metrics.FromContext(ctx); cfg.GlobalConfig.Metrics.Enabled && cfg.Metrics.Enabled && ok {
+		handler = middlewarestd.Handler("/api/qa", middleware.New(
+			middleware.Config{
+				Recorder: recorder,
+				Service:  "htwr-qa",
+			}), handler)
+	} else if cfg.GlobalConfig.Metrics.Enabled && cfg.Metrics.Enabled && !ok {
+		log.Error().Str("subsystem", "panikzettel").Msg("retrieving metrics recorder from context")
+
+	}
+
+	handler = sessions.AuthMiddleware(handler)
+	handler = httputils.LogMiddleware(handler)
+	h.handler = handler
 	return h
 }
 

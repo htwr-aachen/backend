@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/htwr-aachen/backend/pkg/admin/config"
 	"github.com/htwr-aachen/backend/pkg/admin/handlers"
 	"github.com/htwr-aachen/backend/pkg/qa/db"
 	"github.com/htwr-aachen/backend/pkg/session"
@@ -24,7 +25,7 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 	var err error
 	var service AdminService
 
-	_, err = LoadConfig(ctx, conf)
+	cfg, err := config.LoadConfig(ctx, conf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("configuring admin service: %w", err)
 	}
@@ -41,7 +42,7 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 		return nil, nil, err
 	}
 
-	h := handlers.New(service.DB, service.Sessions)
+	h := handlers.New(ctx, cfg, service.DB, service.Sessions)
 
 	closer := func() {}
 	return h, closer, nil

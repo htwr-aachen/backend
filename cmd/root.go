@@ -92,7 +92,11 @@ func initConfig() {
 		conf.AddConfigPath("/etc/htwr-backend")
 	}
 
-	conf.SetDefault("log_level", "Trace")
+	conf.SetDefault("log_level", "Info")
+
+	if development {
+		conf.SetDefault("log_level", "Trace")
+	}
 
 	conf.SetEnvPrefix("HTWR_BACKEND")
 	conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))

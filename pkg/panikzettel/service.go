@@ -6,13 +6,13 @@ import (
 	"net/http"
 
 	"github.com/htwr-aachen/backend/internal/httputils"
+	"github.com/htwr-aachen/backend/internal/metrics"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/cloud"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/handlers"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/service"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog/log"
-	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
 	"github.com/slok/go-http-metrics/middleware"
 	middlewarestd "github.com/slok/go-http-metrics/middleware/std"
 	"github.com/spf13/viper"
@@ -35,11 +35,6 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 		return nil, nil, fmt.Errorf("validating panikzettel service: %w", err)
 	}
 
-	mdlw := middleware.New(middleware.Config{
-		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  "htwr-panikzettel",
-	})
-
 	var cloudClient CloudClient
 	switch cfg.CloudConfig.Provider {
 	case config.CloudProviderGoogle:
@@ -57,7 +52,19 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 	r.HandleFunc("GET /", panikHandler.GetPanikzettelMeta)
 	r.HandleFunc("GET /{filename}", panikHandler.GetPanikzettel)
 
-	handler := middlewarestd.Handler("", mdlw, r)
+	var handler http.Handler
+	handler = r
+	if recorder, ok := metrics.FromContext(ctx); cfg.GlobalConfig.Metrics.Enabled && cfg.Metrics.Enabled && ok {
+		handler = middlewarestd.Handler("/api/panikzettel", middleware.New(
+			middleware.Config{
+				Recorder: recorder,
+				Service:  "htwr-panikzettel",
+			}), handler)
+	} else if cfg.GlobalConfig.Metrics.Enabled && cfg.Metrics.Enabled && !ok {
+		log.Error().Str("subsystem", "panikzettel").Msg("retrieving metrics recorder from context")
+
+	}
+
 	if cfg.GlobalConfig.InsecureDev {
 		c := cors.AllowAll()
 		handler = c.Handler(handler)

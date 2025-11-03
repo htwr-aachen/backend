@@ -57,14 +57,16 @@ Examples:
   # Mixed configuration
   HTWR_ADMIN_AUTH_SECRET=secret123 htwr-backend run --config config.yaml --port 9000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		server, err := server.New(conf)
-		if err != nil {
-			log.Error().Err(err).Msg("validating configuration")
-			return err
-		}
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
-		ctx, err = configurator.LoadAndAttach(ctx, conf)
+		if conf.GetBool("global.insecure_dev") {
+			log.Warn().Msg("running in insecure dev mode")
+			conf.Set("global.insecure_dev", true)
+		}
+
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+
+		ctx, err := configurator.LoadAndAttach(ctx, conf)
 		if err != nil {
 			log.Error().Err(err).Msg("loading global configuration")
 			return fmt.Errorf("could not load global configuration: %w", err)
@@ -82,9 +84,14 @@ Examples:
 
 			return fmt.Errorf("could not connect to database %w", err)
 		}
-
-		defer cancel()
 		defer database.Close()
+
+		server, err := server.New(conf)
+		if err != nil {
+			log.Error().Err(err).Msg("validating configuration")
+			return err
+		}
+
 		err = server.Run(ctx, conf)
 		if err != nil {
 			log.Error().Err(err).Msg("running application")
@@ -110,24 +117,32 @@ func init() {
 	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	runCmd.PersistentFlags().String("public-host", "", "hostname/ip to bind the public server to. Defaults to [::]")
-	_ = conf.BindPFlag("qa.host", runCmd.PersistentFlags().Lookup("public-host"))
 	runCmd.PersistentFlags().String("public-port", "", "port to bind the public service to. Defaults to 8080")
-	_ = conf.BindPFlag("qa.port", runCmd.PersistentFlags().Lookup("public-port"))
 
 	runCmd.PersistentFlags().String("admin-host", "", "Hostname/IP to bind the admin endpoints to. Defaults to [::]")
-	_ = conf.BindPFlag("admin.host", runCmd.PersistentFlags().Lookup("admin-host"))
 	runCmd.PersistentFlags().String("admin-port", "", "port to bind the admin service to. Combining with others, if full hostname:port matches. Defaults to 8081")
-	_ = conf.BindPFlag("admin.port", runCmd.PersistentFlags().Lookup("admin-port"))
 
 	runCmd.PersistentFlags().String("metrics-host", "", "Hostname/IP to bind the metrics endpoints to. Defaults to [::]")
-	_ = conf.BindPFlag("metrics.host", runCmd.PersistentFlags().Lookup("metrics-host"))
 	runCmd.PersistentFlags().String("metrics-port", "", "Port to bind the metrics endpoints to. Combining with others, if full hostname:port matches. Defaults to 9090")
-	_ = conf.BindPFlag("metrics_port", runCmd.PersistentFlags().Lookup("metrics-port"))
 
 	runCmd.PersistentFlags().Bool("disable-panikzettel", false, "Disable the Panikzettel subsystem")
-	_ = conf.BindPFlag("panikzettel.disabled", runCmd.PersistentFlags().Lookup("disable-panikzettel"))
 	runCmd.PersistentFlags().Bool("disable-qa", false, "Disable the QA subsystem")
-	_ = conf.BindPFlag("qa.disabled", runCmd.PersistentFlags().Lookup("disable-qa"))
 	runCmd.PersistentFlags().Bool("disable-admin", false, "Disable the Admin subsystem")
+
+	cobra.OnInitialize(runBind)
+}
+
+func runBind() {
+	_ = conf.BindPFlag("qa.host", runCmd.PersistentFlags().Lookup("public-host"))
+	_ = conf.BindPFlag("qa.port", runCmd.PersistentFlags().Lookup("public-port"))
+
+	_ = conf.BindPFlag("admin.host", runCmd.PersistentFlags().Lookup("admin-host"))
+	_ = conf.BindPFlag("admin.port", runCmd.PersistentFlags().Lookup("admin-port"))
+
+	_ = conf.BindPFlag("metrics.host", runCmd.PersistentFlags().Lookup("metrics-host"))
+	_ = conf.BindPFlag("metrics_port", runCmd.PersistentFlags().Lookup("metrics-port"))
+
+	_ = conf.BindPFlag("panikzettel.disabled", runCmd.PersistentFlags().Lookup("disable-panikzettel"))
+	_ = conf.BindPFlag("qa.disabled", runCmd.PersistentFlags().Lookup("disable-qa"))
 	_ = conf.BindPFlag("admin.disabled", runCmd.PersistentFlags().Lookup("disable-admin"))
 }

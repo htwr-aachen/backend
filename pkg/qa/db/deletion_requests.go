@@ -26,7 +26,7 @@ func (db *DB) insertDeletionRequest(ctx context.Context, entityId uint32, entity
 	query := `
 	INSERT INTO deletion_requests (entity_id, entity_type, reason)
 	VALUES ($1, $2, $3)
-	RETURNING (id, status, created_at);
+	RETURNING id, status, created_at;
 `
 
 	err = tx.QueryRow(ctx, query, inserted.EntityId, inserted.EntityType, inserted.Reason).Scan(&inserted.Id, &inserted.Status, &inserted.CreatedAt)

@@ -51,6 +51,8 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 	r.HandleFunc("GET /questions", public.GetQuestions)
 	r.HandleFunc("POST /questions", public.NewQuestion)
 	r.HandleFunc("POST /questions/{qid}/answers", public.NewAnswer)
+	r.HandleFunc("DELETE /questions/{id}", public.RequestDeleteQuestion)
+	r.HandleFunc("DELETE /answers/{id}", public.RequestDeleteAnswer)
 
 	// TODO: delete requests
 
@@ -69,6 +71,7 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 
 	}
 	if cfg.GlobalConfig.InsecureDev {
+		log.Debug().Msg("settings all all cors due to dev mode")
 		c := cors.AllowAll()
 		handler = c.Handler(handler)
 	}

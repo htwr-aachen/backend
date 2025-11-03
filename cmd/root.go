@@ -67,7 +67,6 @@ func init() {
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	initConfig()
 	cobra.OnInitialize(initValidation)
 
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default searches for htwr-backend.yaml in current dir, ./config, $XDG_CONFIG_HOME/htwr-backend, /etc/htwr-backend)")
@@ -75,6 +74,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "", "logging level (panic, fatal, error, warn, info, debug, trace)")
 
 	rootCmd.PersistentFlags().BoolVar(&development, "insecure-dev", false, "Activate insecure development mode")
+
+	cobra.OnInitialize(initConfig)
 
 }
 
@@ -93,10 +94,6 @@ func initConfig() {
 	}
 
 	conf.SetDefault("log_level", "Info")
-
-	if development {
-		conf.SetDefault("log_level", "Trace")
-	}
 
 	conf.SetEnvPrefix("HTWR_BACKEND")
 	conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))

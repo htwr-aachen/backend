@@ -28,7 +28,7 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
           flavor: |
-            suffix=-arm64,onlatest=true
+            suffix=-amd64,onlatest=true
       - name: Build & Push AMD64
         uses: docker/build-push-action@v6
         with:

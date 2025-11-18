@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/lib/pq"
@@ -12,22 +13,20 @@ import (
 
 var pool *pgxpool.Pool
 
-func New(config *DBConfig) (*pgxpool.Pool, error) {
+func New(cfg *config.DB) (*pgxpool.Pool, error) {
 	log.Info().Msg("Connecting to postgresql")
 	var err error
 
-	poolConfig, err := pgxpool.ParseConfig(config.DBConnStr)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DBConnStr)
 	if err != nil {
 		log.Err(err).Msg("parsing postgres config")
 		return nil, fmt.Errorf("parsing database config: %w", err)
 	}
 
-	if config.dbSetConfig {
-		poolConfig.MaxConns = config.DBMaxConns
-		poolConfig.MaxConnLifetime = config.DBConnMaxLifetime
-		poolConfig.MinConns = config.DBMinConns
-		poolConfig.HealthCheckPeriod = config.DBConnHealthCheckPeriod
-	}
+	poolConfig.MaxConns = cfg.DBMaxConns
+	poolConfig.MaxConnLifetime = cfg.DBConnMaxLifetime
+	poolConfig.MinConns = cfg.DBMinConns
+	poolConfig.HealthCheckPeriod = cfg.DBConnHealthCheckPeriod
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
@@ -41,7 +40,7 @@ func New(config *DBConfig) (*pgxpool.Pool, error) {
 
 	log.Info().Msg("DB connection established")
 
-	ctx, cancel := context.WithTimeout(context.Background(), config.DBTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.DBTimeout)
 	err = pool.Ping(ctx)
 	cancel()
 	if err != nil {

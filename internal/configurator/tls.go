@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -13,27 +14,6 @@ const (
 	TLSVersion12 = "tls1.2"
 	TLSVersion13 = "tls1.3"
 )
-
-type baseConfig struct {
-	MinVersionStr      string `mapstructure:"min_version" validate:"omitempty,oneof=tls1.2 tls1.3"`
-	MinVersion         uint16 `mapstructure:"-"`
-	MaxVersionStr      string `mapstructure:"max_version" validate:"omitempty,oneof=tls1.2 tls1.3"`
-	MaxVersion         uint16 `mapstructure:"-"`
-	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify"`
-}
-
-type ConnectionTLSConfig struct {
-	baseConfig
-	ServerName string `mapstructure:"server_name" validate:"omitempty"`
-	ServerCert string `mapstructure:"server_cert" validate:"omitempty,file"`
-	ClientCert string `mapstructure:"client_cert" validate:"omitempty,file"`
-	ClientKey  string `mapstructure:"client_key" validate:"omitempty,file"`
-}
-
-type GlobalTLSConfig struct {
-	baseConfig
-	TrustBundle []string `mapstructure:"trust_bundle" validate:"omitempty"`
-}
 
 func ParseTLSVersion(versionStr string) (uint16, error) {
 	switch versionStr {
@@ -46,7 +26,7 @@ func ParseTLSVersion(versionStr string) (uint16, error) {
 	}
 }
 
-func mergeFromConfig(cfg *baseConfig, tlsConfig *tls.Config) {
+func mergeFromConfig(cfg *config.TLSBaseConfig, tlsConfig *tls.Config) {
 	if cfg.MinVersionStr != "" {
 		tlsConfig.MinVersion = cfg.MinVersion
 	}
@@ -62,8 +42,8 @@ func mergeFromConfig(cfg *baseConfig, tlsConfig *tls.Config) {
 
 }
 
-func MergeFromConnConfig(cfg *ConnectionTLSConfig, tlsConfig *tls.Config) error {
-	mergeFromConfig(&cfg.baseConfig, tlsConfig)
+func MergeFromConnConfig(cfg *config.ConnectionTLSConfig, tlsConfig *tls.Config) error {
+	mergeFromConfig(&cfg.TLSBaseConfig, tlsConfig)
 
 	// Handle custom certificate chain
 	if cfg.ServerCert != "" {
@@ -100,8 +80,8 @@ func MergeFromConnConfig(cfg *ConnectionTLSConfig, tlsConfig *tls.Config) error 
 
 	return nil
 }
-func MergeFromGlobalConfig(cfg *GlobalTLSConfig, tlsConfig *tls.Config) error {
-	mergeFromConfig(&cfg.baseConfig, tlsConfig)
+func MergeFromGlobalConfig(cfg *config.GlobalTLSConfig, tlsConfig *tls.Config) error {
+	mergeFromConfig(&cfg.TLSBaseConfig, tlsConfig)
 
 	// Handle custom certificate chain
 	if len(cfg.TrustBundle) > 0 {
@@ -119,6 +99,25 @@ func MergeFromGlobalConfig(cfg *GlobalTLSConfig, tlsConfig *tls.Config) error {
 		}
 
 		tlsConfig.RootCAs = caCertPool
+	}
+
+	return nil
+}
+
+func MergeFromServerConfig(cfg *config.ServerTLSConfig, tlsConfig *tls.Config) error {
+	mergeFromConfig(&cfg.TLSBaseConfig, tlsConfig)
+
+	if cfg.ServerCert != "" || cfg.ServerKey != "" {
+		cert, err := tls.LoadX509KeyPair(cfg.ServerCert, cfg.ServerKey)
+		if err != nil {
+			return fmt.Errorf("could not load server cert and key file: %w", err)
+		}
+
+		if tlsConfig.Certificates == nil {
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		} else {
+			tlsConfig.Certificates = append(tlsConfig.Certificates, cert)
+		}
 	}
 
 	return nil

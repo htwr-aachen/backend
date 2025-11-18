@@ -5,35 +5,31 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/htwr-aachen/backend/internal/configurator"
 	"github.com/htwr-aachen/backend/internal/httputils"
 	"github.com/htwr-aachen/backend/internal/metrics"
-	"github.com/htwr-aachen/backend/pkg/qa/config"
 	"github.com/htwr-aachen/backend/pkg/qa/db"
 	"github.com/htwr-aachen/backend/pkg/qa/handlers"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog/log"
 	"github.com/slok/go-http-metrics/middleware"
 	middlewarestd "github.com/slok/go-http-metrics/middleware/std"
-	"github.com/spf13/viper"
 )
 
 type service struct {
 	db *db.DB
 }
 
-func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) {
-	if conf == nil {
-		log.Panic().Stack().Msg("nil conf given")
-	}
-
+func Init(ctx context.Context) (http.Handler, func(), error) {
 	var service service
+	var err error
 
-	log.Debug().Msg("Loading QA Config")
-
-	cfg, err := config.Load(ctx, conf)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading qa config: %w", err)
+	gcfg, ok := configurator.FromContext(ctx)
+	if !ok {
+		log.Panic().Stack().Msg("no configuration context given")
 	}
+
+	cfg := gcfg.QA
 
 	service.db, err = db.New(ctx)
 	if err != nil {
@@ -60,17 +56,17 @@ func Init(ctx context.Context, conf *viper.Viper) (http.Handler, func(), error) 
 
 	var handler http.Handler
 	handler = r
-	if recorder, ok := metrics.FromContext(ctx); cfg.GlobalConfig.Metrics.Enabled && cfg.Metrics.Enabled && ok {
+	if recorder, ok := metrics.FromContext(ctx); gcfg.Global.Metrics.Enabled && cfg.Metrics.Enabled && ok {
 		handler = middlewarestd.Handler("/api/qa", middleware.New(
 			middleware.Config{
 				Recorder: recorder,
 				Service:  "htwr-qa",
 			}), handler)
-	} else if cfg.GlobalConfig.Metrics.Enabled && cfg.Metrics.Enabled && !ok {
+	} else if gcfg.Global.Metrics.Enabled && cfg.Metrics.Enabled && !ok {
 		log.Error().Str("subsystem", "panikzettel").Msg("retrieving metrics recorder from context")
 
 	}
-	if cfg.GlobalConfig.InsecureDev {
+	if gcfg.Global.InsecureDev {
 		log.Debug().Msg("settings all all cors due to dev mode")
 		c := cors.AllowAll()
 		handler = c.Handler(handler)

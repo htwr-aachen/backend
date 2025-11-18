@@ -2,26 +2,23 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/htwr-aachen/backend/internal/configurator"
 	"github.com/rs/zerolog/log"
 	"github.com/slok/go-http-metrics/metrics"
 	promMetrics "github.com/slok/go-http-metrics/metrics/prometheus"
-	"github.com/spf13/viper"
 )
 
 type contextKey struct{}
 
-func CreateAndAttach(parent context.Context, conf *viper.Viper) (context.Context, error) {
-	if conf == nil {
-		log.Panic().Stack().Msg("nil conf given")
+func CreateAndAttach(parent context.Context) (context.Context, error) {
+
+	cfg, ok := configurator.FromContext(parent)
+	if !ok {
+		log.Fatal().Stack().Msg("no configuration context")
 	}
 
-	globalCfg, ok := configurator.FromContext(parent)
-	if !ok {
-		return parent, fmt.Errorf("loading global metrics configuration")
-	}
+	globalCfg := cfg.Global
 
 	recorder := promMetrics.NewRecorder(promMetrics.Config{
 		Prefix: globalCfg.Metrics.Prefix,

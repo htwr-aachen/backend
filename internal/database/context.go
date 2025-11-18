@@ -4,23 +4,23 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/htwr-aachen/backend/internal/configurator"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 )
 
 type contextKey struct{}
 
-func CreateAndAttach(parent context.Context, conf *viper.Viper) (context.Context, error) {
-	if conf == nil {
-		log.Panic().Stack().Msg("nil conf given")
-	}
-	config, err := LoadDBConfig(parent, conf)
-	if config == nil || err != nil {
-		return parent, fmt.Errorf("loading database configuration: %w", err)
+func CreateAndAttach(parent context.Context) (context.Context, error) {
+
+	gcfg, ok := configurator.FromContext(parent)
+	if !ok {
+		log.Fatal().Stack().Msg("no configuration context")
 	}
 
-	pool, err := New(config)
+	cfg := &gcfg.Database
+
+	pool, err := New(cfg)
 	if err != nil {
 		log.Info().Err(err).Msg("creating database connection pool")
 		return parent, fmt.Errorf("creating database pool: %w", err)

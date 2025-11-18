@@ -10,10 +10,10 @@ import (
 
 func (s *Server) setupPublicRouter() http.Handler {
 	r := http.NewServeMux()
-	if s.config.PanikzettelEnabled {
+	if s.cfg.Panikzettel.Enabled {
 		r.Handle("/api/panikzettel/", http.StripPrefix("/api/panikzettel", s.services.Panikzettel))
 	}
-	if s.config.QAEnabled {
+	if s.cfg.QA.Enabled {
 		log.Debug().Msg("Enabling QA routes")
 		r.Handle("/api/qa/", http.StripPrefix("/api/qa", s.services.QA))
 	}
@@ -22,7 +22,7 @@ func (s *Server) setupPublicRouter() http.Handler {
 
 func (s *Server) setupAdminRouter() *http.ServeMux {
 	r := http.NewServeMux()
-	if s.config.AdminEnabled {
+	if s.cfg.Admin.Enabled {
 		r.Handle("/", s.services.Admin)
 	}
 	return r

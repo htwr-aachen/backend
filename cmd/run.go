@@ -8,14 +8,17 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/htwr-aachen/backend/internal/configurator"
 	"github.com/htwr-aachen/backend/internal/database"
 	"github.com/htwr-aachen/backend/internal/metrics"
 	"github.com/htwr-aachen/backend/internal/server"
+	"github.com/knadh/koanf/providers/posflag"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // runCmd represents the run command
@@ -58,27 +61,21 @@ Examples:
   HTWR_ADMIN_AUTH_SECRET=secret123 htwr-backend run --config config.yaml --port 9000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		if conf.GetBool("global.insecure_dev") {
-			log.Warn().Msg("running in insecure dev mode")
-			conf.Set("global.insecure_dev", true)
-		}
-
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 
 		ctx, err := configurator.LoadAndAttach(ctx, conf)
 		if err != nil {
-			log.Error().Err(err).Msg("loading global configuration")
-			return fmt.Errorf("could not load global configuration: %w", err)
+			return fmt.Errorf("loading & validating configuration: %w", err)
 		}
 
-		ctx, err = metrics.CreateAndAttach(ctx, conf)
+		ctx, err = metrics.CreateAndAttach(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("creating metrics recorder")
 			return fmt.Errorf("could not create metrics recorder: %w", err)
 		}
 
-		ctx, err = database.CreateAndAttach(ctx, conf)
+		ctx, err = database.CreateAndAttach(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("creating database connection pool")
 
@@ -86,13 +83,13 @@ Examples:
 		}
 		defer database.Close()
 
-		server, err := server.New(conf)
+		server, err := server.New(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("validating configuration")
 			return err
 		}
 
-		err = server.Run(ctx, conf)
+		err = server.Run(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("running application")
 			return err
@@ -116,33 +113,44 @@ func init() {
 	// is called directly, e.g.:
 	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
-	runCmd.PersistentFlags().String("public-host", "", "hostname/ip to bind the public server to. Defaults to [::]")
-	runCmd.PersistentFlags().String("public-port", "", "port to bind the public service to. Defaults to 8080")
+	runCmd.PersistentFlags().Bool("qa-disabled", false, "Enable the qa subsystem")
+	runCmd.PersistentFlags().String("qa-host", "", "hostname/ip to bind the qa public server to. Defaults to [::]")
+	runCmd.PersistentFlags().String("qa-port", "", "port to bind the qa public service to. Defaults to 8080")
 
+	runCmd.PersistentFlags().Bool("panikzettel-disabled", false, "Enable the panikzettel subsystem")
+	runCmd.PersistentFlags().String("panikzettel-host", "", "hostname/ip to bind the panikzettel public server to. Defaults to [::]")
+	runCmd.PersistentFlags().String("panikzettel-port", "", "port to bind the panikzettel public service to. Defaults to 8080")
+
+	runCmd.PersistentFlags().Bool("admin-disabled", false, "Enable the admin subsystem")
 	runCmd.PersistentFlags().String("admin-host", "", "Hostname/IP to bind the admin endpoints to. Defaults to [::]")
 	runCmd.PersistentFlags().String("admin-port", "", "port to bind the admin service to. Combining with others, if full hostname:port matches. Defaults to 8081")
 
+	runCmd.PersistentFlags().Bool("metrics-disabled", false, "Enable the metrics subsystem")
 	runCmd.PersistentFlags().String("metrics-host", "", "Hostname/IP to bind the metrics endpoints to. Defaults to [::]")
 	runCmd.PersistentFlags().String("metrics-port", "", "Port to bind the metrics endpoints to. Combining with others, if full hostname:port matches. Defaults to 9090")
-
-	runCmd.PersistentFlags().Bool("disable-panikzettel", false, "Disable the Panikzettel subsystem")
-	runCmd.PersistentFlags().Bool("disable-qa", false, "Disable the QA subsystem")
-	runCmd.PersistentFlags().Bool("disable-admin", false, "Disable the Admin subsystem")
 
 	cobra.OnInitialize(runBind)
 }
 
 func runBind() {
-	_ = conf.BindPFlag("qa.host", runCmd.PersistentFlags().Lookup("public-host"))
-	_ = conf.BindPFlag("qa.port", runCmd.PersistentFlags().Lookup("public-port"))
 
-	_ = conf.BindPFlag("admin.host", runCmd.PersistentFlags().Lookup("admin-host"))
-	_ = conf.BindPFlag("admin.port", runCmd.PersistentFlags().Lookup("admin-port"))
+	fs := runCmd.Flags()
+	if err := conf.Load(posflag.ProviderWithFlag(fs, ".", conf, func(f *pflag.Flag) (string, any) {
+		if k, found := strings.CutSuffix(f.Name, "-disabled"); found {
+			val, ok := posflag.FlagVal(fs, f).(bool)
+			if !ok {
+				log.Panic().Stack().Msg("flag not typed as expected")
+			}
 
-	_ = conf.BindPFlag("metrics.host", runCmd.PersistentFlags().Lookup("metrics-host"))
-	_ = conf.BindPFlag("metrics_port", runCmd.PersistentFlags().Lookup("metrics-port"))
+			k := strings.ReplaceAll(k, "-", ".") + ".enabled"
 
-	_ = conf.BindPFlag("panikzettel.disabled", runCmd.PersistentFlags().Lookup("disable-panikzettel"))
-	_ = conf.BindPFlag("qa.disabled", runCmd.PersistentFlags().Lookup("disable-qa"))
-	_ = conf.BindPFlag("admin.disabled", runCmd.PersistentFlags().Lookup("disable-admin"))
+			fmt.Printf("Setting %s: %t\n", k, !val)
+			return k, !val
+		}
+
+		return strings.ReplaceAll(f.Name, "-", "."), posflag.FlagVal(fs, f)
+
+	}), nil); err != nil {
+		log.Fatal().Err(err).Stack().Msg("binding flags into configuration")
+	}
 }

@@ -6,8 +6,9 @@ import (
 	"net/http"
 
 	"github.com/coreos/go-oidc"
+	"github.com/htwr-aachen/backend/internal/configurator"
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 )
 
@@ -20,27 +21,28 @@ type oidcProviderConfig struct {
 
 type SessionSubsystem struct {
 	db         *DB
-	config     SessionConfig
+	config     config.Session
 	oidcConfig []oidcProviderConfig
 	mux        *http.ServeMux
 }
 
-func New(ctx context.Context, conf *viper.Viper, parentConfig *SessionUsageConfig) (*SessionSubsystem, error) {
-	config, err := LoadConfig(ctx, conf, parentConfig)
-	if err != nil {
-		log.Err(err).Msg("parsing session configuration")
-		return nil, err
+func New(ctx context.Context, parentConfig *config.SessionUsageConfig) (*SessionSubsystem, error) {
+	gcfg, ok := configurator.FromContext(ctx)
+	if !ok {
+		log.Panic().Stack().Msg("no configuration context given")
 	}
 
-	if config.Disabled {
+	cfg := configurator.MergeSession(&gcfg.Session, parentConfig)
+
+	if cfg.Disabled {
 		return &SessionSubsystem{
 			db:         nil,
-			config:     *config,
+			config:     *cfg,
 			oidcConfig: nil,
 		}, nil
 	}
 
-	db, err := newSessionDB(ctx, *config)
+	db, err := newSessionDB(ctx, *cfg)
 	if err != nil {
 		log.Err(err).Msg("creating session db")
 		return nil, err
@@ -49,8 +51,8 @@ func New(ctx context.Context, conf *viper.Viper, parentConfig *SessionUsageConfi
 	subsystem := SessionSubsystem{
 		db: db,
 
-		config:     *config,
-		oidcConfig: make([]oidcProviderConfig, 0, len(config.Providers)),
+		config:     *cfg,
+		oidcConfig: make([]oidcProviderConfig, 0, len(cfg.Providers)),
 	}
 
 	authMux := http.NewServeMux()

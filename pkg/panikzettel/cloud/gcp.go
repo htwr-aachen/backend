@@ -14,7 +14,7 @@ import (
 	"os"
 
 	"github.com/htwr-aachen/backend/internal/configurator"
-	"github.com/htwr-aachen/backend/pkg/panikzettel/config"
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/rs/zerolog/log"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/gcsblob"
@@ -35,10 +35,10 @@ type GCPCloudClient struct {
 	signer *gcpSigner
 }
 
-func NewGCP(ctx context.Context, serviceCfg *config.Config) (*GCPCloudClient, error) {
-	cfg := serviceCfg.CloudConfig
+func NewGCP(ctx context.Context, gcfg *config.Config) (*GCPCloudClient, error) {
+	cfg := gcfg.Panikzettel.CloudConfig
 
-	transport, err := createTLSTransport(serviceCfg)
+	transport, err := createTLSTransport(gcfg)
 	if err != nil {
 		log.Err(err).Msg("creating GCP TLS transport")
 		return nil, fmt.Errorf("creating GCP TLS transport: %w", err)
@@ -93,8 +93,8 @@ func NewGCP(ctx context.Context, serviceCfg *config.Config) (*GCPCloudClient, er
 func createTLSTransport(cfg *config.Config) (http.RoundTripper, error) {
 	tlsConfig := &tls.Config{}
 
-	configurator.MergeFromGlobalConfig(&cfg.GlobalConfig.TLS, tlsConfig)
-	configurator.MergeFromConnConfig(&cfg.CloudConfig.TLSConfig, tlsConfig)
+	configurator.MergeFromGlobalConfig(&cfg.Global.TLS, tlsConfig)
+	configurator.MergeFromConnConfig(&cfg.Panikzettel.CloudConfig.TLSConfig, tlsConfig)
 
 	// Create transport with custom TLS config
 	transport := &http.Transport{

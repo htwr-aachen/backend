@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/htwr-aachen/backend/internal/database"
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/patrickmn/go-cache"
 )
@@ -15,7 +16,7 @@ type DB struct {
 	cache *cache.Cache
 }
 
-func newSessionDB(ctx context.Context, config SessionConfig) (*DB, error) {
+func newSessionDB(ctx context.Context, config config.Session) (*DB, error) {
 
 	db, ok := database.FromContext(ctx)
 	if !ok {

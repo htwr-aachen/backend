@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/knadh/koanf/v2"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 )
 
 const TAG_NAME = "fileconfig"
@@ -31,11 +31,25 @@ func ReadSecretFile(path string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-// GetStringOrFile gets a value from viper, checking for a _file variant first
+// ReadFile reads a file and returns raw bytes
+func ReadFile(path string) ([]byte, error) {
+	if path == "" {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading file %s: %w", path, err)
+	}
+
+	return data, nil
+}
+
+// GetStringOrFile gets a value from koanf, checking for a _file variant first
 // Example: GetStringOrFile(conf, "password") checks "password_file" first, then "password"
-func GetStringOrFile(conf *viper.Viper, key string) (string, error) {
+func GetStringOrFile(conf *koanf.Koanf, key string) (string, error) {
 	fileKey := key + "_file"
-	if filePath := conf.GetString(fileKey); filePath != "" {
+	if filePath := conf.String(fileKey); filePath != "" {
 		value, err := ReadSecretFile(filePath)
 		if err != nil {
 			return "", fmt.Errorf("loading %s from file: %w", key, err)
@@ -49,19 +63,44 @@ func GetStringOrFile(conf *viper.Viper, key string) (string, error) {
 		}
 	}
 
-	return conf.GetString(key), nil
+	return conf.String(key), nil
+}
+
+// GetBytesOrFile gets a value from koanf as bytes, checking for a _file variant first
+func GetBytesOrFile(conf *koanf.Koanf, key string) ([]byte, error) {
+	fileKey := key + "_file"
+	if filePath := conf.String(fileKey); filePath != "" {
+		value, err := ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("loading %s from file: %w", key, err)
+		}
+		if len(value) > 0 {
+			log.Debug().
+				Str("key", key).
+				Str("file", filePath).
+				Msg("loaded bytes from file")
+			return value, nil
+		}
+	}
+
+	return conf.Bytes(key), nil
 }
 
 // ResolveFiles walks through a struct and resolves any *_file fields into their corresponding value fields
 // It uses reflection to find fields ending in "File" and resolves them to their base field
+// Supports both string fields (content is trimmed) and []byte fields (raw content)
 //
 // Example:
 //
 //	type Config struct {
-//	    Password     string `mapstructure:"password"`
-//	    PasswordFile string `mapstructure:"password_file"`
+//	    Password     string `koanf:"password"`
+//	    PasswordFile string `koanf:"password_file"`
+//	    Certificate  []byte `koanf:"certificate"`
+//	    CertificateFile string `koanf:"certificate_file"`
 //	}
-//	// After ResolveFiles, if PasswordFile is set, Password will contain the file contents
+//	// After ResolveFiles:
+//	// - If PasswordFile is set, Password will contain the trimmed file contents
+//	// - If CertificateFile is set, Certificate will contain the raw file bytes
 func ResolveFiles(config any) error {
 	return resolveFilesRecursive(reflect.ValueOf(config), "")
 }
@@ -117,24 +156,42 @@ func resolveFilesRecursive(v reflect.Value, path string) error {
 		}
 
 		if fileInfo, hasFileField := fileFields[fieldName]; hasFileField {
-			if fileInfo.filePath != "" && field.Type.Kind() == reflect.String {
-				// Read the file and set the value
-				content, err := ReadSecretFile(fileInfo.filePath)
-				if err != nil {
-					fieldPath := path
-					if fieldPath != "" {
-						fieldPath += "."
-					}
-					fieldPath += fieldName
-					return fmt.Errorf("resolving %s: %w", fieldPath, err)
+			if fileInfo.filePath != "" && fieldValue.CanSet() {
+				fieldPath := path
+				if fieldPath != "" {
+					fieldPath += "."
 				}
+				fieldPath += fieldName
 
-				if content != "" && fieldValue.CanSet() {
-					fieldValue.SetString(content)
-					log.Trace().
-						Str("field", fieldName).
-						Str("file", fileInfo.filePath).
-						Msg("resolved field from file")
+				// Handle string fields (trim whitespace)
+				if field.Type.Kind() == reflect.String {
+					content, err := ReadSecretFile(fileInfo.filePath)
+					if err != nil {
+						return fmt.Errorf("resolving %s: %w", fieldPath, err)
+					}
+
+					if content != "" {
+						fieldValue.SetString(content)
+						log.Trace().
+							Str("field", fieldName).
+							Str("file", fileInfo.filePath).
+							Msg("resolved string field from file")
+					}
+				} else if field.Type.Kind() == reflect.Slice && field.Type.Elem().Kind() == reflect.Uint8 {
+					// Handle []byte fields (raw content)
+					content, err := ReadFile(fileInfo.filePath)
+					if err != nil {
+						return fmt.Errorf("resolving %s: %w", fieldPath, err)
+					}
+
+					if len(content) > 0 {
+						fieldValue.SetBytes(content)
+						log.Trace().
+							Str("field", fieldName).
+							Str("file", fileInfo.filePath).
+							Int("bytes", len(content)).
+							Msg("resolved bytes field from file")
+					}
 				}
 			}
 		}
@@ -193,8 +250,8 @@ type fileFieldInfo struct {
 }
 
 // UnmarshalWithFileResolution is a convenience function that unmarshals config and resolves files in one call
-func UnmarshalWithFileResolution(conf *viper.Viper, target any) error {
-	if err := conf.Unmarshal(target); err != nil {
+func UnmarshalWithFileResolution(conf *koanf.Koanf, target any) error {
+	if err := conf.Unmarshal("", target); err != nil {
 		return fmt.Errorf("unmarshaling config: %w", err)
 	}
 

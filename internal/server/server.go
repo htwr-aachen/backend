@@ -2,96 +2,35 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/htwr-aachen/backend/internal/configurator"
 	"github.com/htwr-aachen/backend/internal/liveness"
 	"github.com/htwr-aachen/backend/pkg/admin"
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel"
 	"github.com/htwr-aachen/backend/pkg/qa"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
 )
 
-type Config struct {
-	PublicHost              string
-	PublicPort              string
-	PublicReadHeaderTimeout time.Duration
-	PublicWriteTimeout      time.Duration
-	PublicIdleTimeout       time.Duration
-
-	AdminHost              string
-	AdminPort              string
-	AdminReadHeaderTimeout time.Duration
-	AdminWriteTimeout      time.Duration
-	AdminIdleTimeout       time.Duration
-
-	MetricsHost              string
-	MetricsPort              string
-	MetricsReadHeaderTimeout time.Duration
-	MetricsWriteTimeout      time.Duration
-	MetricsIdleTimeout       time.Duration
-
-	PanikzettelEnabled bool
-	QAEnabled          bool
-	AdminEnabled       bool
-}
-
-func setDefaults(conf *viper.Viper) {
-	conf.SetDefault("qa.host", "::")
-	conf.SetDefault("qa.port", "8080")
-	conf.SetDefault("qa.read_header_timeout", time.Minute)
-	conf.SetDefault("qa.write_timeout", time.Minute)
-	conf.SetDefault("qa.idle_timeout", 5*time.Minute)
-	conf.SetDefault("admin.host", "::")
-	conf.SetDefault("admin.port", "8081")
-	conf.SetDefault("admin.read_header_timeout", time.Minute)
-	conf.SetDefault("admin.write_timeout", time.Minute)
-	conf.SetDefault("admin.idle_timeout", 5*time.Minute)
-	conf.SetDefault("metrics.host", "::")
-	conf.SetDefault("metrics.port", "9090")
-	conf.SetDefault("metrics.read_header_timeout", time.Minute)
-	conf.SetDefault("metrics.write_timeout", time.Minute)
-	conf.SetDefault("metrics.idle_timeout", 5*time.Minute)
-	conf.SetDefault("panikzettel.disabled", false)
-	conf.SetDefault("qa.disabled", false)
-	conf.SetDefault("admin.disabled", false)
-
-}
-
-func (s *Server) loadConfig(conf *viper.Viper) {
-	setDefaults(conf)
-
-	s.config = &Config{
-		PublicHost:               conf.GetString("qa.host"),
-		PublicPort:               conf.GetString("qa.port"),
-		PublicReadHeaderTimeout:  conf.GetDuration("qa.read_header_timeout"),
-		PublicWriteTimeout:       conf.GetDuration("qa.write_timeout"),
-		PublicIdleTimeout:        conf.GetDuration("qa.idle_timeout"),
-		AdminHost:                conf.GetString("admin.host"),
-		AdminPort:                conf.GetString("admin.port"),
-		AdminReadHeaderTimeout:   conf.GetDuration("admin.read_header_timeout"),
-		AdminWriteTimeout:        conf.GetDuration("admin.write_timeout"),
-		AdminIdleTimeout:         conf.GetDuration("admin.idle_timeout"),
-		MetricsHost:              conf.GetString("metrics.host"),
-		MetricsPort:              conf.GetString("metrics.port"),
-		MetricsReadHeaderTimeout: conf.GetDuration("metrics.read_header_timeout"),
-		MetricsWriteTimeout:      conf.GetDuration("metrics.write_timeout"),
-		MetricsIdleTimeout:       conf.GetDuration("metrics.idle_timeout"),
-
-		PanikzettelEnabled: !conf.GetBool("panikzettel.disabled"),
-		QAEnabled:          !conf.GetBool("qa.disabled"),
-		AdminEnabled:       !conf.GetBool("admin.disabled"),
-	}
+type Startable interface {
+	Start() error
+	Shutdown(ctx context.Context) error
+	String() string
 }
 
 // Server manages the HTTP servers and services
 type Server struct {
-	config   *Config
+	cfg      *config.Config
 	services *Services
+	servers  []Startable
 }
 
 // Services holds all initialized service handlers
@@ -111,154 +50,151 @@ func (s *Services) Close() {
 }
 
 // New creates a new server instance
-func New(conf *viper.Viper) (*Server, error) {
-	if conf == nil {
-		log.Panic().Stack().Msg("nil viper conf given")
+func New(ctx context.Context) (*Server, error) {
+	cfg, ok := configurator.FromContext(ctx)
+	if !ok {
+		log.Panic().Stack().Msg("no configuration context")
 	}
 
-	server := &Server{}
-	server.loadConfig(conf)
+	server := &Server{
+		cfg:     cfg,
+		servers: make([]Startable, 0),
+	}
+
+	err := server.setup(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return server, nil
 }
 
-// Run starts the server and blocks until context is cancelled
-func (s *Server) Run(ctx context.Context, conf *viper.Viper) error {
-	if conf == nil {
-		log.Panic().Stack().Msg("nil conf given")
-	}
+func (s *Server) setup(ctx context.Context) error {
+	var err error
+	log.Info().Msg("Initializing services and preparing servers...")
 
-	log.Info().Msg("Starting htwr-aachen backend server")
-
-	// Init services
-	services, err := s.initializeServices(ctx, conf)
+	s.services, err = s.initializeServices(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize services: %w", err)
 	}
-	defer services.Close()
-	s.services = services
 
-	// Setup routers
+	// setup Routers
 	publicRouter := s.setupPublicRouter()
 	adminRouter := s.setupAdminRouter()
 	metricsRouter := s.setupMetricsRouter()
 
-	// Create servers
-	publicAddr := net.JoinHostPort(s.config.PublicHost, s.config.PublicPort)
-	adminAddr := net.JoinHostPort(s.config.AdminHost, s.config.AdminPort)
-	metricsAddr := net.JoinHostPort(s.config.MetricsHost, s.config.MetricsPort)
+	publicAddr := net.JoinHostPort(s.cfg.QA.Host, strconv.Itoa(s.cfg.QA.Port))
+	adminAddr := net.JoinHostPort(s.cfg.Admin.Host, strconv.Itoa(s.cfg.Admin.Port))
+	metricsAddr := net.JoinHostPort(s.cfg.MetricsServer.Host, strconv.Itoa(s.cfg.MetricsServer.Port))
 
-	separateAdmin := adminAddr != publicAddr
-	separateMetrics := metricsAddr != adminAddr && metricsAddr != publicAddr
+	// 4. configure Servers
+	// Standard HTTP/1.1 & HTTP/2 (Go handles H2 automatically over TLS if enabled)
+	s.addHTTPServer("Public", publicAddr, publicRouter,
+		s.cfg.QA.ReadHeaderTimeout, s.cfg.QA.WriteTimeout, s.cfg.QA.IdleTimeout)
 
-	publicServer := &http.Server{
-		Addr:              publicAddr,
-		Handler:           publicRouter,
-		ReadHeaderTimeout: s.config.PublicReadHeaderTimeout,
-		WriteTimeout:      s.config.PublicWriteTimeout,
-		IdleTimeout:       s.config.PublicIdleTimeout,
+	// Check for separate interfaces to avoid port conflicts
+	if adminAddr != publicAddr {
+		s.addHTTPServer("Admin", adminAddr, adminRouter,
+			s.cfg.Admin.ReadHeaderTimeout, s.cfg.Admin.WriteTimeout, s.cfg.Admin.IdleTimeout)
 	}
 
-	adminServer := &http.Server{
-		Addr:              adminAddr,
-		Handler:           adminRouter,
-		ReadHeaderTimeout: s.config.AdminReadHeaderTimeout,
-		WriteTimeout:      s.config.AdminWriteTimeout,
-		IdleTimeout:       s.config.AdminIdleTimeout,
-	}
-	metricsServer := &http.Server{
-		Addr:              metricsAddr,
-		Handler:           metricsRouter,
-		ReadHeaderTimeout: s.config.MetricsReadHeaderTimeout,
-		WriteTimeout:      s.config.MetricsWriteTimeout,
-		IdleTimeout:       s.config.MetricsIdleTimeout,
+	if metricsAddr != adminAddr && metricsAddr != publicAddr {
+		s.addHTTPServer("Metrics", metricsAddr, metricsRouter,
+			s.cfg.MetricsServer.ReadHeaderTimeout, s.cfg.MetricsServer.WriteTimeout, s.cfg.MetricsServer.IdleTimeout)
 	}
 
-	// Start servers
-	var wg sync.WaitGroup
-	errChan := make(chan error, 2)
-
-	// Start public server
-	wg.Go(func() {
-		log.Info().Str("address", publicAddr).Msg("Starting public API server")
-		if err := publicServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errChan <- fmt.Errorf("public server error: %w", err)
-		}
-	})
-
-	if separateAdmin {
-		// Start admin server
-		wg.Go(func() {
-			log.Info().Str("address", adminAddr).Msg("Starting admin server")
-			if err := adminServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				errChan <- fmt.Errorf("admin server error: %w", err)
-			}
-		})
-	}
-
-	if separateMetrics {
-		// Start metrics server
-		wg.Go(func() {
-			log.Info().Str("address", metricsAddr).Msg("Starting metrics server")
-			if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				errChan <- fmt.Errorf("metrics server error: %w", err)
-			}
-		})
-	}
-
-	log.Info().Msg("Servers started successfully")
-	log.Info().Msgf("Public API available %s", "http://"+publicAddr)
-	log.Info().Msgf("Admin interface available %s", "http://"+adminAddr)
-	log.Info().Msgf("Metrics API available %s", "http://"+metricsAddr)
-
-	// Wait for context cancellation or server error
-	select {
-	case <-ctx.Done():
-		log.Info().Msg("Shutdown signal received")
-	case err := <-errChan:
-		return err
-	}
-
-	// Graceful shutdown
-	log.Info().Msg("Shutting down servers...")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	var shutdownWg sync.WaitGroup
-	shutdownWg.Go(func() {
-		if err := publicServer.Shutdown(shutdownCtx); err != nil {
-			log.Err(err).Msg("Main server shutdown error")
-		}
-	})
-
-	shutdownWg.Go(func() {
-		if err := adminServer.Shutdown(shutdownCtx); err != nil {
-			log.Err(err).Msg("Admin server shutdown error")
-		}
-	})
-
-	shutdownWg.Go(func() {
-		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-			log.Err(err).Msg("Metrics server shutdown error")
-		}
-	})
-
-	shutdownWg.Wait()
-	wg.Wait()
-
-	log.Info().Msg("Server shutdown complete")
+	log.Info().Int("count", len(s.servers)).Msg("Server instances configured")
 	return nil
 }
 
-func (s *Server) initializeServices(ctx context.Context, conf *viper.Viper) (*Services, error) {
+// Run starts the server and blocks until context is cancelled
+func (s *Server) Run(ctx context.Context) error {
+
+	log.Info().Msg("Starting htwr-aachen backend server")
+	if s.services == nil {
+		return errors.New("server not setup: create with New() before Run()")
+	}
+	defer s.services.Close()
+
+	g, gCtx := errgroup.WithContext(ctx)
+
+	// Start all registered servers
+	for _, srv := range s.servers {
+		serverInstance := srv
+		g.Go(func() error {
+			log.Info().Str("server", serverInstance.String()).Msg("Starting server")
+			if err := serverInstance.Start(); err != nil {
+				// If a server fails to start (e.g. port bind error), we return error
+				// which cancels gCtx and triggers shutdown for everyone else
+				return fmt.Errorf("%s failed: %w", serverInstance.String(), err)
+			}
+			return nil
+		})
+	}
+
+	log.Info().Msg("All servers running. Waiting for shutdown signal...")
+
+	// Wait for context cancellation (signal) or error in one of the servers
+	<-gCtx.Done()
+	shutdownReason := gCtx.Err()
+
+	if shutdownReason != nil && shutdownReason != context.Canceled {
+		log.Err(shutdownReason).Msg("Server runtime error encountered")
+	} else {
+		log.Info().Msg("Shutdown signal received")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for _, srv := range s.servers {
+		wg.Add(1)
+		serverInstance := srv
+		go func() {
+			defer wg.Done()
+			log.Info().Str("server", serverInstance.String()).Msg("Shutting down")
+			if err := serverInstance.Shutdown(shutdownCtx); err != nil {
+				log.Error().Err(err).Str("server", serverInstance.String()).Msg("Shutdown error")
+			}
+		}()
+	}
+
+	wg.Wait()
+	log.Info().Msg("Shutdown complete")
+
+	// Return the original error if it wasn't just a clean stop
+	if shutdownReason != context.Canceled {
+		return shutdownReason
+	}
+	return nil
+}
+
+// Helper to add a standard HTTP server to the list
+func (s *Server) addHTTPServer(name, addr string, handler http.Handler, read, write, idle time.Duration) {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: read,
+		WriteTimeout:      write,
+		IdleTimeout:       idle,
+	}
+	s.servers = append(s.servers, &httpServer{
+		name:   name,
+		server: srv,
+	})
+}
+
+func (s *Server) initializeServices(ctx context.Context) (*Services, error) {
 	services := &Services{}
 
 	services.Liveness = liveness.NewLivenessServer(nil)
 	services.closers = append(services.closers, services.Liveness.Close)
 
 	// Init QA subsystem
-	if s.config.QAEnabled {
+	if s.cfg.QA.Enabled {
 		log.Info().Msg("Initializing QA service")
-		qaHandler, qaCloser, err := qa.Init(ctx, conf)
+		qaHandler, qaCloser, err := qa.Init(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize qa service: %w", err)
 		}
@@ -267,9 +203,9 @@ func (s *Server) initializeServices(ctx context.Context, conf *viper.Viper) (*Se
 	}
 
 	// Init Panikzettel subsystem
-	if s.config.PanikzettelEnabled {
+	if s.cfg.Panikzettel.Enabled {
 		log.Info().Msg("Initializing Panikzettel service")
-		panikzettelHandler, panikzettelCloser, err := panikzettel.Init(ctx, conf)
+		panikzettelHandler, panikzettelCloser, err := panikzettel.Init(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize panikzettel service: %w", err)
 		}
@@ -278,9 +214,9 @@ func (s *Server) initializeServices(ctx context.Context, conf *viper.Viper) (*Se
 	}
 
 	// Init Admin subsystem
-	if s.config.AdminEnabled {
+	if s.cfg.Admin.Enabled {
 		log.Info().Msg("Initializing Admin service")
-		adminHandler, adminCloser, err := admin.Init(ctx, conf)
+		adminHandler, adminCloser, err := admin.Init(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize admin service: %w", err)
 		}
@@ -291,3 +227,42 @@ func (s *Server) initializeServices(ctx context.Context, conf *viper.Viper) (*Se
 	log.Info().Msg("All services initialized successfully")
 	return services, nil
 }
+
+// --- Implementations of Runnable ---
+
+// httpServer wraps net/http.Server to satisfy Runnable
+type httpServer struct {
+	name   string
+	server *http.Server
+}
+
+func (h *httpServer) Start() error {
+	// ListenAndServe always returns a non-nil error.
+	// ErrServerClosed is normal during shutdown.
+	err := h.server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+func (h *httpServer) Shutdown(ctx context.Context) error {
+	return h.server.Shutdown(ctx)
+}
+
+func (h *httpServer) String() string {
+	return fmt.Sprintf("%s-HTTP (%s)", h.name, h.server.Addr)
+}
+
+// Example wrapper for a future HTTP/3 server (using quic-go usually)
+/*
+type http3Server struct {
+	name   string
+	server *http3.Server
+}
+
+func (h *http3Server) Start() error {
+	return h.server.ListenAndServe()
+}
+// ... implementation ...
+*/

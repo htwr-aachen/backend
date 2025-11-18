@@ -6,7 +6,7 @@ import (
 
 	"github.com/htwr-aachen/backend/internal/httputils"
 	"github.com/htwr-aachen/backend/internal/metrics"
-	"github.com/htwr-aachen/backend/pkg/admin/config"
+	"github.com/htwr-aachen/backend/pkg/config"
 	qaschema "github.com/htwr-aachen/backend/pkg/qa/schema"
 	"github.com/htwr-aachen/backend/pkg/schema"
 	"github.com/rs/zerolog/log"
@@ -55,7 +55,8 @@ type AdminHandler struct {
 	qadb     QADB
 }
 
-func New(ctx context.Context, cfg *config.Admin, qadb QADB, sessions SessionProvider) *AdminHandler {
+func New(ctx context.Context, gcfg *config.Config, qadb QADB, sessions SessionProvider) *AdminHandler {
+	cfg := &gcfg.Admin
 	h := &AdminHandler{
 		qadb:     qadb,
 		sessions: sessions,
@@ -91,13 +92,13 @@ func New(ctx context.Context, cfg *config.Admin, qadb QADB, sessions SessionProv
 
 	var handler http.Handler
 	handler = h.router
-	if recorder, ok := metrics.FromContext(ctx); cfg.GlobalConfig.Metrics.Enabled && cfg.Metrics.Enabled && ok {
+	if recorder, ok := metrics.FromContext(ctx); gcfg.Global.Metrics.Enabled && cfg.Metrics.Enabled && ok {
 		handler = middlewarestd.Handler("/api/qa", middleware.New(
 			middleware.Config{
 				Recorder: recorder,
 				Service:  "htwr-qa",
 			}), handler)
-	} else if cfg.GlobalConfig.Metrics.Enabled && cfg.Metrics.Enabled && !ok {
+	} else if gcfg.Global.Metrics.Enabled && cfg.Metrics.Enabled && !ok {
 		log.Error().Str("subsystem", "panikzettel").Msg("retrieving metrics recorder from context")
 
 	}

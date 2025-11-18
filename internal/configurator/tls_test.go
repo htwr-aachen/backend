@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/htwr-aachen/backend/pkg/config"
 )
 
 // generateCACert generates a self-signed CA certificate
@@ -195,8 +197,8 @@ func TestParseTLSVersion(t *testing.T) {
 
 func TestMergeFromConnConfig(t *testing.T) {
 	t.Run("MinVersion set", func(t *testing.T) {
-		cfg := &ConnectionTLSConfig{
-			baseConfig: baseConfig{
+		cfg := &config.ConnectionTLSConfig{
+			TLSBaseConfig: config.TLSBaseConfig{
 				MinVersionStr: TLSVersion13,
 				MinVersion:    tls.VersionTLS13,
 			},
@@ -213,8 +215,8 @@ func TestMergeFromConnConfig(t *testing.T) {
 	})
 
 	t.Run("MaxVersion set", func(t *testing.T) {
-		cfg := &ConnectionTLSConfig{
-			baseConfig: baseConfig{
+		cfg := &config.ConnectionTLSConfig{
+			TLSBaseConfig: config.TLSBaseConfig{
 				MaxVersionStr: TLSVersion12,
 				MaxVersion:    tls.VersionTLS12,
 			},
@@ -231,8 +233,8 @@ func TestMergeFromConnConfig(t *testing.T) {
 	})
 
 	t.Run("InsecureSkipVerify set", func(t *testing.T) {
-		cfg := &ConnectionTLSConfig{
-			baseConfig: baseConfig{
+		cfg := &config.ConnectionTLSConfig{
+			TLSBaseConfig: config.TLSBaseConfig{
 				InsecureSkipVerify: true,
 			},
 		}
@@ -248,7 +250,7 @@ func TestMergeFromConnConfig(t *testing.T) {
 	})
 
 	t.Run("ServerName set", func(t *testing.T) {
-		cfg := &ConnectionTLSConfig{
+		cfg := &config.ConnectionTLSConfig{
 			ServerName: "example.com",
 		}
 		tlsConfig := &tls.Config{}
@@ -272,7 +274,7 @@ func TestMergeFromConnConfig(t *testing.T) {
 			t.Fatalf("failed to write test cert: %v", err)
 		}
 
-		cfg := &ConnectionTLSConfig{
+		cfg := &config.ConnectionTLSConfig{
 			ServerCert: certFile,
 		}
 		tlsConfig := &tls.Config{}
@@ -287,7 +289,7 @@ func TestMergeFromConnConfig(t *testing.T) {
 	})
 
 	t.Run("Invalid CA certificate file", func(t *testing.T) {
-		cfg := &ConnectionTLSConfig{
+		cfg := &config.ConnectionTLSConfig{
 			ServerCert: "/nonexistent/path/ca.crt",
 		}
 		tlsConfig := &tls.Config{}
@@ -305,7 +307,7 @@ func TestMergeFromConnConfig(t *testing.T) {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
-		cfg := &ConnectionTLSConfig{
+		cfg := &config.ConnectionTLSConfig{
 			ServerCert: certFile,
 		}
 		tlsConfig := &tls.Config{}
@@ -332,7 +334,7 @@ func TestMergeFromConnConfig(t *testing.T) {
 			t.Fatalf("failed to write test key: %v", err)
 		}
 
-		cfg := &ConnectionTLSConfig{
+		cfg := &config.ConnectionTLSConfig{
 			ClientCert: certFile,
 			ClientKey:  keyFile,
 		}
@@ -358,7 +360,7 @@ func TestMergeFromConnConfig(t *testing.T) {
 			t.Fatalf("failed to write test cert: %v", err)
 		}
 
-		cfg := &ConnectionTLSConfig{
+		cfg := &config.ConnectionTLSConfig{
 			ClientCert: certFile,
 			ClientKey:  "/nonexistent/key",
 		}
@@ -387,7 +389,7 @@ func TestMergeFromConnConfig(t *testing.T) {
 			t.Fatalf("failed to write test key: %v", err)
 		}
 
-		cfg := &ConnectionTLSConfig{
+		cfg := &config.ConnectionTLSConfig{
 			ClientCert: certFile,
 			ClientKey:  keyFile,
 		}
@@ -402,8 +404,8 @@ func TestMergeFromConnConfig(t *testing.T) {
 
 func TestMergeFromGlobalConfig(t *testing.T) {
 	t.Run("MinVersion and MaxVersion set", func(t *testing.T) {
-		cfg := &GlobalTLSConfig{
-			baseConfig: baseConfig{
+		cfg := &config.GlobalTLSConfig{
+			TLSBaseConfig: config.TLSBaseConfig{
 				MinVersionStr: TLSVersion12,
 				MinVersion:    tls.VersionTLS12,
 				MaxVersionStr: TLSVersion13,
@@ -434,7 +436,7 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 			t.Fatalf("failed to write test bundle: %v", err)
 		}
 
-		cfg := &GlobalTLSConfig{
+		cfg := &config.GlobalTLSConfig{
 			TrustBundle: []string{bundleFile},
 		}
 		tlsConfig := &tls.Config{}
@@ -462,7 +464,7 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 			t.Fatalf("failed to write test bundle: %v", err)
 		}
 
-		cfg := &GlobalTLSConfig{
+		cfg := &config.GlobalTLSConfig{
 			TrustBundle: []string{bundleFile},
 		}
 		tlsConfig := &tls.Config{}
@@ -495,7 +497,7 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 			t.Fatalf("failed to write test bundle: %v", err)
 		}
 
-		cfg := &GlobalTLSConfig{
+		cfg := &config.GlobalTLSConfig{
 			TrustBundle: []string{bundle1File, bundle2File},
 		}
 		tlsConfig := &tls.Config{}
@@ -510,7 +512,7 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 	})
 
 	t.Run("Invalid trust bundle file", func(t *testing.T) {
-		cfg := &GlobalTLSConfig{
+		cfg := &config.GlobalTLSConfig{
 			TrustBundle: []string{"/nonexistent/bundle.pem"},
 		}
 		tlsConfig := &tls.Config{}
@@ -528,7 +530,7 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
-		cfg := &GlobalTLSConfig{
+		cfg := &config.GlobalTLSConfig{
 			TrustBundle: []string{bundleFile},
 		}
 		tlsConfig := &tls.Config{}
@@ -540,7 +542,7 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 	})
 
 	t.Run("Nil trust bundle set", func(t *testing.T) {
-		cfg := &GlobalTLSConfig{
+		cfg := &config.GlobalTLSConfig{
 			TrustBundle: nil,
 		}
 		tlsConfig := &tls.Config{}
@@ -552,8 +554,8 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 	})
 
 	t.Run("InsecureSkipVerify set", func(t *testing.T) {
-		cfg := &GlobalTLSConfig{
-			baseConfig: baseConfig{
+		cfg := &config.GlobalTLSConfig{
+			TLSBaseConfig: config.TLSBaseConfig{
 				InsecureSkipVerify: true,
 			},
 		}
@@ -571,7 +573,7 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 
 func TestMergeFromConfig(t *testing.T) {
 	t.Run("Empty config does not modify tls.Config", func(t *testing.T) {
-		cfg := &baseConfig{}
+		cfg := &config.TLSBaseConfig{}
 		tlsConfig := &tls.Config{}
 
 		mergeFromConfig(cfg, tlsConfig)
@@ -604,7 +606,7 @@ func TestConnectionTLSConfig_MultipleClientCertificates(t *testing.T) {
 		t.Fatalf("failed to write test key: %v", err)
 	}
 
-	cfg := &ConnectionTLSConfig{
+	cfg := &config.ConnectionTLSConfig{
 		ClientCert: certFile,
 		ClientKey:  keyFile,
 	}

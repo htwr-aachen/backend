@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/htwr-aachen/backend/pkg/panikzettel/config"
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/models"
 	"github.com/patrickmn/go-cache"
 	"github.com/prometheus/client_golang/prometheus"
@@ -43,14 +43,14 @@ var (
 type PanikzettelDB struct {
 	bucket *blob.Bucket
 	cache  *cache.Cache
-	cfg    *config.Config
+	cfg    *config.Panikzettel
 }
 
 func New(cfg *config.Config, bucket *blob.Bucket) *PanikzettelDB {
 	return &PanikzettelDB{
-		cfg:    cfg,
+		cfg:    &cfg.Panikzettel,
 		bucket: bucket,
-		cache:  cache.New(cfg.CacheDuration, cfg.CacheCleanupInterval),
+		cache:  cache.New(cfg.Panikzettel.CacheDuration, cfg.Panikzettel.CacheCleanupInterval),
 	}
 }
 

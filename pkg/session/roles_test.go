@@ -3,6 +3,7 @@ package session
 import (
 	"testing"
 
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/schema"
 )
 
@@ -206,7 +207,7 @@ func TestSessionSubsystem_GetRoleFromGroups(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &SessionSubsystem{
-				config: SessionConfig{
+				config: config.Session{
 					RoleMap: tt.roleMap,
 				},
 			}

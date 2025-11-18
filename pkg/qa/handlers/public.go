@@ -1,16 +1,16 @@
 package handlers
 
 import (
-	"github.com/htwr-aachen/backend/pkg/qa/config"
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/qa/db"
 )
 
 type Handler struct {
 	db     *db.DB
-	config *config.APIConfig
+	config *config.QAAPI
 }
 
-func New(config *config.APIConfig, db *db.DB) (*Handler, error) {
+func New(config *config.QAAPI, db *db.DB) (*Handler, error) {
 	return &Handler{
 		db:     db,
 		config: config,

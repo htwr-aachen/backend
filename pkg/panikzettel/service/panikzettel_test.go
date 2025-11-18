@@ -7,35 +7,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/htwr-aachen/backend/pkg/panikzettel/config"
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/models"
 	"github.com/patrickmn/go-cache"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/memblob"
 )
 
-var cfg = config.Config{
-	MetadataFile:         "metadata.json",
+var cfg = config.Panikzettel{
+	MetadataFilename:     "metadata.json",
 	MaxFileSize:          10 * 1024 * 1024,
 	CacheDuration:        5 * time.Minute,
 	CacheCleanupInterval: 10 * time.Minute,
 	BaseURL:              "https://example.com/api/panikzettel",
 }
 
+var gcfg = config.Config{
+	Panikzettel: cfg,
+}
+
 // Test setup helper
 func setupTest(t *testing.T) (*blob.Bucket, *PanikzettelDB) {
-	cfg = config.Config{
-		MetadataFile:         "metadata.json",
-		MaxFileSize:          10 * 1024 * 1024,
-		CacheDuration:        5 * time.Minute,
-		CacheCleanupInterval: 5 * time.Minute,
-		BaseURL:              "https://example.com/api/panikzettel",
-	}
 
 	bucket := memblob.OpenBucket(nil)
-	db := New(&cfg, bucket)
+	db := New(&gcfg, bucket)
 
 	assert.NotNil(t, db)
 	assert.NotNil(t, db.bucket)
@@ -63,7 +61,7 @@ func TestGetPanikzettelMeta_FromCache(t *testing.T) {
 			URL:       "https://example.com/api/panikzettel/test.pdf",
 		},
 	}
-	db.cache.Set(cfg.MetadataFile, expectedMetas, cache.DefaultExpiration)
+	db.cache.Set(cfg.MetadataFilename, expectedMetas, cache.DefaultExpiration)
 
 	ctx := context.Background()
 	metas, err := db.GetPanikzettelMeta(ctx)
@@ -95,7 +93,7 @@ func TestGetPanikzettelMeta_FromBucket(t *testing.T) {
 	assert.Equal(t, "https://example.com/api/panikzettel/math101.pdf", metas[0].URL)
 
 	// Check cache is populated
-	cachedMetas, found := db.cache.Get(cfg.MetadataFile)
+	cachedMetas, found := db.cache.Get(cfg.MetadataFilename)
 	assert.True(t, found)
 	assert.Equal(t, metas, cachedMetas)
 }
@@ -105,7 +103,7 @@ func TestGetPanikzettelMeta_InvalidCacheEntry(t *testing.T) {
 	ctx := context.Background()
 
 	// Set invalid cache entry (wrong type)
-	db.cache.Set(cfg.MetadataFile, "invalid data", cache.DefaultExpiration)
+	db.cache.Set(cfg.MetadataFilename, "invalid data", cache.DefaultExpiration)
 
 	// Bucket should be called as a fallback
 	metadataContent := `{
@@ -125,7 +123,7 @@ func TestGetPanikzettelMeta_InvalidCacheEntry(t *testing.T) {
 	assert.Len(t, metas, 1)
 
 	// The cache should be updated
-	cachedMetas, found := db.cache.Get(cfg.MetadataFile)
+	cachedMetas, found := db.cache.Get(cfg.MetadataFilename)
 	assert.True(t, found)
 	assert.Equal(t, metas, cachedMetas)
 }
@@ -181,7 +179,7 @@ func TestPanikzettelExistsInMeta(t *testing.T) {
 		{Name: "Test Panikzettel 1", Filename: "test1.pdf"},
 		{Name: "Test Panikzettel 2", Filename: "test2.pdf"},
 	}
-	db.cache.Set(cfg.MetadataFile, metas, cache.DefaultExpiration)
+	db.cache.Set(cfg.MetadataFilename, metas, cache.DefaultExpiration)
 
 	ctx := context.Background()
 
@@ -231,7 +229,7 @@ func TestGetPanikzettel_NotFoundInMetadata(t *testing.T) {
 	metas := []models.PanikzettelMeta{
 		{Name: "Existing Panikzettel", Filename: "existing.pdf"},
 	}
-	db.cache.Set(cfg.MetadataFile, metas, cache.DefaultExpiration)
+	db.cache.Set(cfg.MetadataFilename, metas, cache.DefaultExpiration)
 
 	ctx := context.Background()
 
@@ -251,7 +249,7 @@ func TestGetPanikzettel_FromCache(t *testing.T) {
 	metas := []models.PanikzettelMeta{
 		{Name: "Test Panikzettel", Filename: "test.pdf"},
 	}
-	db.cache.Set(cfg.MetadataFile, metas, cache.DefaultExpiration)
+	db.cache.Set(cfg.MetadataFilename, metas, cache.DefaultExpiration)
 
 	// Pre-populate panikzettel cache
 	expectedPanikzettel := &models.Panikzettel{
@@ -277,7 +275,7 @@ func TestGetPanikzettel_FromBucket(t *testing.T) {
 	metas := []models.PanikzettelMeta{
 		{Name: "Test Panikzettel", Filename: "test.pdf"},
 	}
-	db.cache.Set(cfg.MetadataFile, metas, cache.DefaultExpiration)
+	db.cache.Set(cfg.MetadataFilename, metas, cache.DefaultExpiration)
 
 	// Write panikzettel to bucket
 	content := []byte("test content")
@@ -304,13 +302,13 @@ func TestGetPanikzettel_SizeValidation(t *testing.T) {
 	ctx := context.Background()
 
 	maxSize := int64(10) // 10 bytes
-	cfg.MaxFileSize = maxSize
+	gcfg.Panikzettel.MaxFileSize = maxSize
 
 	// Pre-populate metadata cache
 	metas := []models.PanikzettelMeta{
 		{Name: "Large File", Filename: "large.pdf"},
 	}
-	db.cache.Set(cfg.MetadataFile, metas, cache.DefaultExpiration)
+	db.cache.Set(cfg.MetadataFilename, metas, cache.DefaultExpiration)
 
 	// Write a file that is too large
 	largeContent := []byte("this content is too large")
@@ -318,7 +316,7 @@ func TestGetPanikzettel_SizeValidation(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = db.GetPanikzettel(ctx, "large.pdf")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	var sizeErr *models.PanikzettelTooLargeError
 	assert.True(t, errors.As(err, &sizeErr))
@@ -331,10 +329,14 @@ func TestCacheDuration(t *testing.T) {
 	setupTest(t)
 
 	expectedDuration := 5 * time.Minute
-	cfg.CacheDuration = expectedDuration
+	gcfg.Panikzettel.CacheDuration = expectedDuration
+
+	gcfg := config.Config{
+		Panikzettel: cfg,
+	}
 
 	bucket := memblob.OpenBucket(nil)
-	db := New(&cfg, bucket)
+	db := New(&gcfg, bucket)
 
 	// Verify cache was created with correct duration
 	assert.NotNil(t, db.cache)

@@ -3,7 +3,7 @@ package cloud
 import (
 	"context"
 
-	"github.com/htwr-aachen/backend/pkg/panikzettel/config"
+	"github.com/htwr-aachen/backend/pkg/config"
 	"gocloud.dev/blob"
 )
 
@@ -11,7 +11,7 @@ type AWSCloudClient struct {
 	bucket *blob.Bucket
 }
 
-func NewAWS(ctx context.Context, cfg config.CloudConfig) (*AWSCloudClient, error) {
+func NewAWS(ctx context.Context, cfg *config.Config) (*AWSCloudClient, error) {
 	return nil, nil
 }
 

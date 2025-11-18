@@ -45,6 +45,14 @@ func GetDefaultConfig() *config.Config {
 			},
 			AuthURLPrefix: "/auth",
 		},
+		Public: config.Public{
+			Enabled:           false,
+			Host:              "::",
+			Port:              8080,
+			ReadHeaderTimeout: time.Minute,
+			WriteTimeout:      time.Minute,
+			IdleTimeout:       5 * time.Minute,
+		},
 		Admin: config.Admin{
 			Enabled:           true,
 			Host:              "::",
@@ -57,12 +65,7 @@ func GetDefaultConfig() *config.Config {
 			},
 		},
 		QA: config.QA{
-			Enabled:           true,
-			Host:              "::",
-			Port:              8080,
-			ReadHeaderTimeout: time.Minute,
-			WriteTimeout:      time.Minute,
-			IdleTimeout:       5 * time.Minute,
+			Enabled: true,
 			Metrics: config.Metrics{
 				Enabled: true,
 			},
@@ -78,12 +81,7 @@ func GetDefaultConfig() *config.Config {
 			},
 		},
 		Panikzettel: config.Panikzettel{
-			Enabled:           true,
-			Host:              "::",
-			Port:              8080,
-			ReadHeaderTimeout: time.Minute,
-			WriteTimeout:      time.Minute,
-			IdleTimeout:       5 * time.Minute,
+			Enabled: true,
 			Metrics: config.Metrics{
 				Enabled: false,
 			},

@@ -114,12 +114,9 @@ func init() {
 	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	runCmd.PersistentFlags().Bool("qa-disabled", false, "Enable the qa subsystem")
-	runCmd.PersistentFlags().String("qa-host", "", "hostname/ip to bind the qa public server to. Defaults to [::]")
-	runCmd.PersistentFlags().String("qa-port", "", "port to bind the qa public service to. Defaults to 8080")
-
 	runCmd.PersistentFlags().Bool("panikzettel-disabled", false, "Enable the panikzettel subsystem")
-	runCmd.PersistentFlags().String("panikzettel-host", "", "hostname/ip to bind the panikzettel public server to. Defaults to [::]")
-	runCmd.PersistentFlags().String("panikzettel-port", "", "port to bind the panikzettel public service to. Defaults to 8080")
+	runCmd.PersistentFlags().String("public-host", "", "hostname/ip to bind the public public server to. Defaults to [::]")
+	runCmd.PersistentFlags().String("public-port", "", "port to bind the public public service to. Defaults to 8080")
 
 	runCmd.PersistentFlags().Bool("admin-disabled", false, "Enable the admin subsystem")
 	runCmd.PersistentFlags().String("admin-host", "", "Hostname/IP to bind the admin endpoints to. Defaults to [::]")
@@ -144,7 +141,6 @@ func runBind() {
 
 			k := strings.ReplaceAll(k, "-", ".") + ".enabled"
 
-			fmt.Printf("Setting %s: %t\n", k, !val)
 			return k, !val
 		}
 

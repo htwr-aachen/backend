@@ -41,9 +41,6 @@ func sessionHook(conf *koanf.Koanf, gcfg *config.Config) error {
 	return nil
 }
 
-func loadFromParentService(cfg *config.Session, parentConfig *config.SessionUsageConfig) {
-}
-
 func loadProvidersFromEnv(conf *koanf.Koanf, cfg *config.Session) error {
 	providerNames := conf.String("session.providers")
 

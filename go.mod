@@ -21,6 +21,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/prometheus/client_golang v1.23.2
+	github.com/quic-go/quic-go v0.56.0
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.34.0
 	github.com/slok/go-http-metrics v0.13.0
@@ -31,6 +32,8 @@ require (
 	golang.org/x/oauth2 v0.33.0
 	google.golang.org/api v0.256.0
 )
+
+require github.com/quic-go/qpack v0.5.1 // indirect
 
 exclude google.golang.org/grpc/stats/opentelemetry v0.0.0-20241004113128-859602c14c6c
 

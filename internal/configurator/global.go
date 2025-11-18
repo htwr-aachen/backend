@@ -103,8 +103,6 @@ func LoadAndAttach(parent context.Context, conf *koanf.Koanf) (context.Context, 
 		return parent, err
 	}
 
-	fmt.Printf("CONFIG: %+v", cfg)
-
 	err = validate(cfg)
 	if err != nil {
 		return parent, err

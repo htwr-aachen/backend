@@ -16,6 +16,7 @@ import (
 	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel"
 	"github.com/htwr-aachen/backend/pkg/qa"
+	"github.com/quic-go/quic-go/http3"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 )
@@ -83,23 +84,20 @@ func (s *Server) setup(ctx context.Context) error {
 	adminRouter := s.setupAdminRouter()
 	metricsRouter := s.setupMetricsRouter()
 
-	publicAddr := net.JoinHostPort(s.cfg.QA.Host, strconv.Itoa(s.cfg.QA.Port))
+	publicAddr := net.JoinHostPort(s.cfg.Public.Host, strconv.Itoa(s.cfg.Public.Port))
 	adminAddr := net.JoinHostPort(s.cfg.Admin.Host, strconv.Itoa(s.cfg.Admin.Port))
 	metricsAddr := net.JoinHostPort(s.cfg.MetricsServer.Host, strconv.Itoa(s.cfg.MetricsServer.Port))
 
-	// 4. configure Servers
-	// Standard HTTP/1.1 & HTTP/2 (Go handles H2 automatically over TLS if enabled)
-	s.addHTTPServer("Public", publicAddr, publicRouter,
-		s.cfg.QA.ReadHeaderTimeout, s.cfg.QA.WriteTimeout, s.cfg.QA.IdleTimeout)
+	s.AddFullStackServer("Public", publicAddr, s.cfg.Public.ServerTLS.ServerCert, s.cfg.Public.ServerTLS.ServerKey, publicRouter,
+		s.cfg.Public.ReadHeaderTimeout, s.cfg.Public.WriteTimeout, s.cfg.Public.IdleTimeout)
 
-	// Check for separate interfaces to avoid port conflicts
 	if adminAddr != publicAddr {
-		s.addHTTPServer("Admin", adminAddr, adminRouter,
+		s.AddFullStackServer("Admin", adminAddr, s.cfg.Admin.ServerTLS.ServerCert, s.cfg.Admin.ServerTLS.ServerKey, adminRouter,
 			s.cfg.Admin.ReadHeaderTimeout, s.cfg.Admin.WriteTimeout, s.cfg.Admin.IdleTimeout)
 	}
 
 	if metricsAddr != adminAddr && metricsAddr != publicAddr {
-		s.addHTTPServer("Metrics", metricsAddr, metricsRouter,
+		s.AddFullStackServer("Metrics", metricsAddr, s.cfg.MetricsServer.ServerTLS.ServerCert, s.cfg.MetricsServer.ServerTLS.ServerKey, metricsRouter,
 			s.cfg.MetricsServer.ReadHeaderTimeout, s.cfg.MetricsServer.WriteTimeout, s.cfg.MetricsServer.IdleTimeout)
 	}
 
@@ -170,21 +168,6 @@ func (s *Server) Run(ctx context.Context) error {
 	return nil
 }
 
-// Helper to add a standard HTTP server to the list
-func (s *Server) addHTTPServer(name, addr string, handler http.Handler, read, write, idle time.Duration) {
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: read,
-		WriteTimeout:      write,
-		IdleTimeout:       idle,
-	}
-	s.servers = append(s.servers, &httpServer{
-		name:   name,
-		server: srv,
-	})
-}
-
 func (s *Server) initializeServices(ctx context.Context) (*Services, error) {
 	services := &Services{}
 
@@ -228,22 +211,28 @@ func (s *Server) initializeServices(ctx context.Context) (*Services, error) {
 	return services, nil
 }
 
-// --- Implementations of Runnable ---
-
 // httpServer wraps net/http.Server to satisfy Runnable
 type httpServer struct {
-	name   string
-	server *http.Server
+	name     string
+	server   *http.Server
+	certFile string
+	keyFile  string
 }
 
 func (h *httpServer) Start() error {
 	// ListenAndServe always returns a non-nil error.
 	// ErrServerClosed is normal during shutdown.
-	err := h.server.ListenAndServe()
+	var err error
+	if h.certFile != "" && h.keyFile != "" {
+		err = h.server.ListenAndServeTLS(h.certFile, h.keyFile)
+	} else {
+		err = h.server.ListenAndServe()
+	}
+
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
-	return err
+	return fmt.Errorf("http server %s failed: %w", h.name, err)
 }
 
 func (h *httpServer) Shutdown(ctx context.Context) error {
@@ -251,18 +240,114 @@ func (h *httpServer) Shutdown(ctx context.Context) error {
 }
 
 func (h *httpServer) String() string {
-	return fmt.Sprintf("%s-HTTP (%s)", h.name, h.server.Addr)
+	scheme := "HTTP"
+	if h.certFile != "" {
+		scheme = "HTTPS/HTTP2"
+	}
+	return fmt.Sprintf("%s-%s (%s)", h.name, scheme, h.server.Addr)
 }
 
-// Example wrapper for a future HTTP/3 server (using quic-go usually)
-/*
 type http3Server struct {
-	name   string
-	server *http3.Server
+	name     string
+	server   *http3.Server
+	certFile string
+	keyFile  string
 }
 
 func (h *http3Server) Start() error {
-	return h.server.ListenAndServe()
+	err := h.server.ListenAndServeTLS(h.certFile, h.keyFile)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+
+	return fmt.Errorf("http3 server %s failed: %w", h.name, err)
 }
-// ... implementation ...
-*/
+
+func (h *http3Server) Shutdown(ctx context.Context) error {
+	return h.server.Shutdown(ctx)
+}
+
+func (h *http3Server) String() string {
+	return fmt.Sprintf("%s-HTTP3/QUIC (%s)", h.name, h.server.Addr)
+}
+
+// Helper to add a standard HTTP server to the list
+func (s *Server) addHTTPServer(name, addr string, handler http.Handler, read, write, idle time.Duration) {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: read,
+		WriteTimeout:      write,
+		IdleTimeout:       idle,
+	}
+	s.servers = append(s.servers, &httpServer{
+		name:   name,
+		server: srv,
+	})
+}
+
+// addSecureServer adds a HTTPS server (HTTP/1.1 + HTTP/2)
+func (s *Server) addSecureServer(name, addr, certFile, keyFile string, handler http.Handler, read, write, idle time.Duration) {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: read,
+		WriteTimeout:      write,
+		IdleTimeout:       idle,
+	}
+
+	// Go's net/http enables HTTP/2 automatically when ListenAndServeTLS is called.
+
+	s.servers = append(s.servers, &httpServer{
+		name:     name,
+		server:   srv,
+		certFile: certFile,
+		keyFile:  keyFile,
+	})
+}
+
+// addHTTP3Server adds a QUIC-based HTTP/3 server
+func (s *Server) addHTTP3Server(name, addr, certFile, keyFile string, handler http.Handler, idle time.Duration) {
+	srv := &http3.Server{
+		Addr:        addr,
+		Handler:     handler,
+		IdleTimeout: idle,
+		// QuicConfig can be added here for fine-tuning
+	}
+
+	s.servers = append(s.servers, &http3Server{
+		name:     name,
+		server:   srv,
+		certFile: certFile,
+		keyFile:  keyFile,
+	})
+}
+
+func (s *Server) AddFullStackServer(name, addr, certFile, keyFile string, handler http.Handler, read, write, idle time.Duration) {
+	if certFile != "" && keyFile != "" {
+		srv := &http3.Server{
+			Addr:        addr,
+			Handler:     handler,
+			IdleTimeout: idle,
+		}
+
+		h3Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			err := srv.SetQUICHeaders(w.Header())
+			if err != nil {
+				log.Err(err).Msg("adding quic headers")
+			}
+			handler.ServeHTTP(w, r)
+		})
+
+		s.addSecureServer(name+"-tcp", addr, certFile, keyFile, h3Handler, read, write, idle)
+
+		s.servers = append(s.servers, &http3Server{
+			name:     name,
+			server:   srv,
+			certFile: certFile,
+			keyFile:  keyFile,
+		})
+	} else {
+		s.addHTTPServer(name, addr, handler, read, write, idle)
+	}
+}

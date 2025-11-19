@@ -7,6 +7,7 @@ import (
 
 	"github.com/coreos/go-oidc"
 	"github.com/htwr-aachen/backend/internal/configurator"
+	"github.com/htwr-aachen/backend/internal/validation"
 	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
@@ -40,6 +41,10 @@ func New(ctx context.Context, parentConfig *config.SessionUsageConfig) (*Session
 			config:     *cfg,
 			oidcConfig: nil,
 		}, nil
+	}
+
+	if err := validation.Validate.Struct(cfg); err != nil {
+		return nil, err
 	}
 
 	db, err := newSessionDB(ctx, *cfg)

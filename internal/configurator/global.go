@@ -32,7 +32,7 @@ func validate(cfg *config.Config) error {
 	var errs error
 
 	// Helper to reduce boilerplate and wrap errors with context
-	check := func(s interface{}, name string) {
+	check := func(s any, name string) {
 		if err := validation.Validate.Struct(s); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("%s config: %w", name, err))
 		}
@@ -45,10 +45,6 @@ func validate(cfg *config.Config) error {
 	// 2. Conditional Validations
 	if cfg.Admin.Enabled {
 		check(&cfg.Admin, "admin")
-	}
-
-	if !cfg.Session.Disabled {
-		check(&cfg.Session, "session")
 	}
 
 	// 4. Feature Flags

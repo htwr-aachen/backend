@@ -3,18 +3,18 @@ package config
 import "time"
 
 type SessionProvider struct {
-	Name             string   `mapstructure:"name" validate:"required"`
-	Issuer           string   `mapstructure:"issuer" validate:"required"`
-	IssuerFile       string   `mapstructure:"issuer_file"`
-	ClientId         string   `mapstructure:"client_id" validate:"required"`
-	ClientIdFile     string   `mapstructure:"client_id_file"`
-	ClientSecret     string   `mapstructure:"client_secret" validate:"required"`
-	ClientSecretFile string   `mapstructure:"client_secret_file"`
-	Endpoint         string   `mapstructure:"endpoint" validate:"required,url"`
-	EndpointFile     string   `mapstructure:"endpoint_file"`
-	RedirectURL      string   `mapstructure:"redirect_url" validate:"required,url"`
-	RedirectURLFile  string   `mapstructure:"redirect_url_file"`
-	Scopes           []string `mapstructure:"scopes" validate:"min=1"`
+	Name             string   `koanf:"name" validate:"required"`
+	Issuer           string   `koanf:"issuer" validate:"required"`
+	IssuerFile       string   `koanf:"issuer_file"`
+	ClientId         string   `koanf:"client_id" validate:"required"`
+	ClientIdFile     string   `koanf:"client_id_file"`
+	ClientSecret     string   `koanf:"client_secret" validate:"required"`
+	ClientSecretFile string   `koanf:"client_secret_file"`
+	Endpoint         string   `koanf:"endpoint" validate:"required,url"`
+	EndpointFile     string   `koanf:"endpoint_file"`
+	RedirectURL      string   `koanf:"redirect_url" validate:"required,url"`
+	RedirectURLFile  string   `koanf:"redirect_url_file"`
+	Scopes           []string `koanf:"scopes" validate:"min=1"`
 }
 
 type Session struct {

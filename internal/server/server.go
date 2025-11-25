@@ -17,6 +17,7 @@ import (
 	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel"
 	"github.com/htwr-aachen/backend/pkg/qa"
+	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -130,7 +131,10 @@ func (s *Server) Run(ctx context.Context) error {
 	for _, srv := range s.servers {
 		serverInstance := srv
 		g.Go(func() error {
-			log.Info().Str("server", serverInstance.String()).Msg("Starting server")
+			if _, ok := srv.(*TLSReloader); !ok {
+				log.Info().Str("server", serverInstance.String()).Msg("Starting server")
+			}
+
 			if err := serverInstance.Start(); err != nil {
 				// If a server fails to start (e.g. port bind error), we return error
 				// which cancels gCtx and triggers shutdown for everyone else
@@ -144,12 +148,11 @@ func (s *Server) Run(ctx context.Context) error {
 
 	// Wait for context cancellation (signal) or error in one of the servers
 	<-gCtx.Done()
-	shutdownReason := gCtx.Err()
 
-	if shutdownReason != nil && shutdownReason != context.Canceled {
-		log.Err(shutdownReason).Msg("Server runtime error encountered")
+	if ctx.Err() != nil {
+		log.Warn().Msg("Shutdown signal received (OS Signal)")
 	} else {
-		log.Info().Msg("Shutdown signal received")
+		log.Error().Msg("One or more servers failed to start. Shutting down")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -157,24 +160,23 @@ func (s *Server) Run(ctx context.Context) error {
 
 	var wg sync.WaitGroup
 	for _, srv := range s.servers {
-		wg.Add(1)
 		serverInstance := srv
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			log.Info().Str("server", serverInstance.String()).Msg("Shutting down")
 			if err := serverInstance.Shutdown(shutdownCtx); err != nil {
 				log.Error().Err(err).Str("server", serverInstance.String()).Msg("Shutdown error")
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
-	log.Info().Msg("Shutdown complete")
+	log.Warn().Msg("Shutdown complete")
 
-	// Return the original error if it wasn't just a clean stop
-	if shutdownReason != context.Canceled {
-		return shutdownReason
+	if err := g.Wait(); err != nil {
+		// This will reveal "bind: address already in use" or similar
+		return err
 	}
+
 	return nil
 }
 
@@ -262,7 +264,7 @@ type http3Server struct {
 }
 
 func (h *http3Server) Start() error {
-	err := h.server.ListenAndServeTLS("", "")
+	err := h.server.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
@@ -319,7 +321,8 @@ func (s *Server) addHTTP3Server(name, addr string, tlsConfig *tls.Config, handle
 		Addr:        addr,
 		Handler:     handler,
 		IdleTimeout: idle,
-		TLSConfig:   tlsConfig,
+		TLSConfig:   http3.ConfigureTLSConfig(tlsConfig),
+		QUICConfig:  &quic.Config{},
 		// QuicConfig can be added here for fine-tuning
 	}
 
@@ -349,21 +352,34 @@ func (s *Server) AddFullStackServer(name, addr string, handler http.Handler, rea
 		NextProtos:     []string{"h2", "http/1.1"},
 	}
 
-	quicServer := &http3.Server{Addr: addr}
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return err
+	}
+	quicServer := &http3.Server{Addr: addr, Port: port}
 	h3Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := quicServer.SetQUICHeaders(w.Header())
-		if err != nil {
-			log.Err(err).Msg("adding quic headers")
+		if r.ProtoMajor < 3 {
+			err := quicServer.SetQUICHeaders(w.Header())
+			if err != nil {
+				log.Err(err).Msg("adding quic headers")
+			}
 		}
 		handler.ServeHTTP(w, r)
 	})
 
 	s.addSecureServer(name+"-tcp", addr, baseTLS.Clone(), h3Handler, read, write, idle)
 
-	quicTLS := baseTLS.Clone()
-	quicTLS.MinVersion = tls.VersionTLS13
-	quicTLS.NextProtos = []string{"h3"}
+	quicServer.IdleTimeout = idle
+	quicServer.TLSConfig = http3.ConfigureTLSConfig(baseTLS.Clone())
+	quicServer.Handler = h3Handler
 
-	s.addHTTP3Server(name, addr, quicTLS, handler, idle)
+	s.servers = append(s.servers, &http3Server{
+		name:   name,
+		server: quicServer,
+	})
 	return nil
 }

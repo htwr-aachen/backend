@@ -82,7 +82,7 @@ func (r *TLSReloader) Reload(force bool) error {
 }
 
 func (r *TLSReloader) Start() error {
-	go r.run()
+	r.run()
 	return nil
 }
 

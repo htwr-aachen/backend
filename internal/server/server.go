@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -88,17 +89,26 @@ func (s *Server) setup(ctx context.Context) error {
 	adminAddr := net.JoinHostPort(s.cfg.Admin.Host, strconv.Itoa(s.cfg.Admin.Port))
 	metricsAddr := net.JoinHostPort(s.cfg.MetricsServer.Host, strconv.Itoa(s.cfg.MetricsServer.Port))
 
-	s.AddFullStackServer("Public", publicAddr, s.cfg.Public.ServerTLS.ServerCert, s.cfg.Public.ServerTLS.ServerKey, publicRouter,
-		s.cfg.Public.ReadHeaderTimeout, s.cfg.Public.WriteTimeout, s.cfg.Public.IdleTimeout)
+	err = s.AddFullStackServer("Public", publicAddr, publicRouter,
+		s.cfg.Public.ReadHeaderTimeout, s.cfg.Public.WriteTimeout, s.cfg.Public.IdleTimeout, &s.cfg.Public.ServerTLS)
+	if err != nil {
+		return err
+	}
 
 	if adminAddr != publicAddr {
-		s.AddFullStackServer("Admin", adminAddr, s.cfg.Admin.ServerTLS.ServerCert, s.cfg.Admin.ServerTLS.ServerKey, adminRouter,
-			s.cfg.Admin.ReadHeaderTimeout, s.cfg.Admin.WriteTimeout, s.cfg.Admin.IdleTimeout)
+		err = s.AddFullStackServer("Admin", adminAddr, adminRouter,
+			s.cfg.Admin.ReadHeaderTimeout, s.cfg.Admin.WriteTimeout, s.cfg.Admin.IdleTimeout, &s.cfg.Admin.ServerTLS)
+		if err != nil {
+			return err
+		}
 	}
 
 	if metricsAddr != adminAddr && metricsAddr != publicAddr {
-		s.AddFullStackServer("Metrics", metricsAddr, s.cfg.MetricsServer.ServerTLS.ServerCert, s.cfg.MetricsServer.ServerTLS.ServerKey, metricsRouter,
-			s.cfg.MetricsServer.ReadHeaderTimeout, s.cfg.MetricsServer.WriteTimeout, s.cfg.MetricsServer.IdleTimeout)
+		err = s.AddFullStackServer("Metrics", metricsAddr, metricsRouter,
+			s.cfg.MetricsServer.ReadHeaderTimeout, s.cfg.MetricsServer.WriteTimeout, s.cfg.MetricsServer.IdleTimeout, &s.cfg.MetricsServer.ServerTLS)
+		if err != nil {
+			return err
+		}
 	}
 
 	log.Info().Int("count", len(s.servers)).Msg("Server instances configured")
@@ -213,18 +223,17 @@ func (s *Server) initializeServices(ctx context.Context) (*Services, error) {
 
 // httpServer wraps net/http.Server to satisfy Runnable
 type httpServer struct {
-	name     string
-	server   *http.Server
-	certFile string
-	keyFile  string
+	name   string
+	server *http.Server
+	isTLS  bool
 }
 
 func (h *httpServer) Start() error {
 	// ListenAndServe always returns a non-nil error.
 	// ErrServerClosed is normal during shutdown.
 	var err error
-	if h.certFile != "" && h.keyFile != "" {
-		err = h.server.ListenAndServeTLS(h.certFile, h.keyFile)
+	if h.isTLS {
+		err = h.server.ListenAndServeTLS("", "")
 	} else {
 		err = h.server.ListenAndServe()
 	}
@@ -241,21 +250,19 @@ func (h *httpServer) Shutdown(ctx context.Context) error {
 
 func (h *httpServer) String() string {
 	scheme := "HTTP"
-	if h.certFile != "" {
+	if h.isTLS {
 		scheme = "HTTPS/HTTP2"
 	}
 	return fmt.Sprintf("%s-%s (%s)", h.name, scheme, h.server.Addr)
 }
 
 type http3Server struct {
-	name     string
-	server   *http3.Server
-	certFile string
-	keyFile  string
+	name   string
+	server *http3.Server
 }
 
 func (h *http3Server) Start() error {
-	err := h.server.ListenAndServeTLS(h.certFile, h.keyFile)
+	err := h.server.ListenAndServeTLS("", "")
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
@@ -287,67 +294,76 @@ func (s *Server) addHTTPServer(name, addr string, handler http.Handler, read, wr
 }
 
 // addSecureServer adds a HTTPS server (HTTP/1.1 + HTTP/2)
-func (s *Server) addSecureServer(name, addr, certFile, keyFile string, handler http.Handler, read, write, idle time.Duration) {
+func (s *Server) addSecureServer(name, addr string, tlsConfig *tls.Config, handler http.Handler, read, write, idle time.Duration) {
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: read,
 		WriteTimeout:      write,
 		IdleTimeout:       idle,
+		TLSConfig:         tlsConfig,
 	}
 
 	// Go's net/http enables HTTP/2 automatically when ListenAndServeTLS is called.
 
 	s.servers = append(s.servers, &httpServer{
-		name:     name,
-		server:   srv,
-		certFile: certFile,
-		keyFile:  keyFile,
+		name:   name,
+		server: srv,
+		isTLS:  tlsConfig != nil,
 	})
 }
 
 // addHTTP3Server adds a QUIC-based HTTP/3 server
-func (s *Server) addHTTP3Server(name, addr, certFile, keyFile string, handler http.Handler, idle time.Duration) {
+func (s *Server) addHTTP3Server(name, addr string, tlsConfig *tls.Config, handler http.Handler, idle time.Duration) {
 	srv := &http3.Server{
 		Addr:        addr,
 		Handler:     handler,
 		IdleTimeout: idle,
+		TLSConfig:   tlsConfig,
 		// QuicConfig can be added here for fine-tuning
 	}
 
 	s.servers = append(s.servers, &http3Server{
-		name:     name,
-		server:   srv,
-		certFile: certFile,
-		keyFile:  keyFile,
+		name:   name,
+		server: srv,
 	})
 }
 
-func (s *Server) AddFullStackServer(name, addr, certFile, keyFile string, handler http.Handler, read, write, idle time.Duration) {
-	if certFile != "" && keyFile != "" {
-		srv := &http3.Server{
-			Addr:        addr,
-			Handler:     handler,
-			IdleTimeout: idle,
-		}
+func (s *Server) AddFullStackServer(name, addr string, handler http.Handler, read, write, idle time.Duration, tlsSrvCfg *config.ServerTLSConfig) error {
 
-		h3Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			err := srv.SetQUICHeaders(w.Header())
-			if err != nil {
-				log.Err(err).Msg("adding quic headers")
-			}
-			handler.ServeHTTP(w, r)
-		})
-
-		s.addSecureServer(name+"-tcp", addr, certFile, keyFile, h3Handler, read, write, idle)
-
-		s.servers = append(s.servers, &http3Server{
-			name:     name,
-			server:   srv,
-			certFile: certFile,
-			keyFile:  keyFile,
-		})
-	} else {
+	if tlsSrvCfg == nil || tlsSrvCfg.ServerCert == "" || tlsSrvCfg.ServerKey == "" {
 		s.addHTTPServer(name, addr, handler, read, write, idle)
+		return nil
 	}
+
+	reloader, err := NewTLSReloader(tlsSrvCfg.ServerCert, tlsSrvCfg.ServerKey, 30*time.Minute)
+	if err != nil {
+		return fmt.Errorf("failed to initialize tls reloader for %s: %w", name, err)
+	}
+	s.servers = append(s.servers, reloader)
+
+	baseTLS := &tls.Config{
+		GetCertificate: reloader.GetCertificateFunc,
+		MinVersion:     tlsSrvCfg.MinVersion,
+		MaxVersion:     tlsSrvCfg.MaxVersion,
+		NextProtos:     []string{"h2", "http/1.1"},
+	}
+
+	quicServer := &http3.Server{Addr: addr}
+	h3Handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := quicServer.SetQUICHeaders(w.Header())
+		if err != nil {
+			log.Err(err).Msg("adding quic headers")
+		}
+		handler.ServeHTTP(w, r)
+	})
+
+	s.addSecureServer(name+"-tcp", addr, baseTLS.Clone(), h3Handler, read, write, idle)
+
+	quicTLS := baseTLS.Clone()
+	quicTLS.MinVersion = tls.VersionTLS13
+	quicTLS.NextProtos = []string{"h3"}
+
+	s.addHTTP3Server(name, addr, quicTLS, handler, idle)
+	return nil
 }

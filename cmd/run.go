@@ -85,7 +85,7 @@ Examples:
 
 		server, err := server.New(ctx)
 		if err != nil {
-			log.Error().Err(err).Msg("validating configuration")
+			log.Error().Err(err).Msg("creating server structure")
 			return err
 		}
 

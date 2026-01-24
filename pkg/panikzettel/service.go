@@ -46,7 +46,7 @@ func Init(ctx context.Context) (http.Handler, func(), error) {
 	}
 
 	db := service.New(gcfg, cloudClient.Bucket())
-	panikHandler := handlers.NewPanikzettel(db)
+	panikHandler := handlers.NewPanikzettel(db, cfg)
 	r := http.NewServeMux()
 	r.HandleFunc("GET /", panikHandler.GetPanikzettelMeta)
 	r.HandleFunc("GET /{filename}", panikHandler.GetPanikzettel)

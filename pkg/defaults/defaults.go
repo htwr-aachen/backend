@@ -81,7 +81,8 @@ func GetDefaultConfig() *config.Config {
 			},
 		},
 		Panikzettel: config.Panikzettel{
-			Enabled: true,
+			Enabled:      true,
+			AutoDownload: false,
 			Metrics: config.Metrics{
 				Enabled: false,
 			},

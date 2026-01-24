@@ -35,6 +35,7 @@ type CloudConfig struct {
 
 type Panikzettel struct {
 	Enabled              bool          `koanf:"enabled"`
+	AutoDownload         bool          `koanf:"auto_download"`
 	Metrics              Metrics       `koanf:"metrics"`
 	BaseURL              string        `koanf:"base_url"`
 	BaseURLFile          string        `koanf:"base_url_file"`

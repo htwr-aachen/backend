@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/models"
 	"github.com/rs/zerolog/log"
 )
@@ -17,12 +18,14 @@ type PanikzettelDB interface {
 }
 
 type Panikzettel struct {
-	db PanikzettelDB
+	db           PanikzettelDB
+	autoDownload bool
 }
 
-func NewPanikzettel(db PanikzettelDB) *Panikzettel {
+func NewPanikzettel(db PanikzettelDB, cfg *config.Panikzettel) *Panikzettel {
 	return &Panikzettel{
-		db: db,
+		db:           db,
+		autoDownload: cfg.AutoDownload,
 	}
 }
 
@@ -64,7 +67,9 @@ func (h *Panikzettel) GetPanikzettel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", panikzettel.Size))
 	w.Header().Set("Last-Modified", panikzettel.LastModified.Format(http.TimeFormat))
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	if h.autoDownload {
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	}
 
 	_, err = w.Write(panikzettel.Content)
 	if err != nil {

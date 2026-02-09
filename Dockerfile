@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.25.3-alpine3.22 AS build-stage
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.25.7-alpine3.23 AS build-stage
 
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
@@ -15,7 +15,7 @@ COPY . .
 RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /htwr-backend main.go
 
 # FROM alpine:latest AS build-release-stage
-FROM alpine:3.22.2
+FROM alpine:3.23.3
 LABEL org.opencontainers.image.source=https://github.com/htwr-aachen/backend
 
 

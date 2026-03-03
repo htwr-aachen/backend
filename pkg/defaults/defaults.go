@@ -15,6 +15,11 @@ func GetDefaultConfig() *config.Config {
 				Prefix:  "",
 				Enabled: true,
 			},
+			OpenTelemetry: config.OpenTelemetry{
+				Enabled:     false,
+				ServiceName: "htwr-backend",
+				Endpoint:    "http://localhost:4318",
+			},
 		},
 		Database: config.DB{
 			DBHost:                  "localhost",

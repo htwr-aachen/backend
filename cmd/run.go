@@ -13,6 +13,7 @@ import (
 
 	"github.com/htwr-aachen/backend/internal/configurator"
 	"github.com/htwr-aachen/backend/internal/database"
+	"github.com/htwr-aachen/backend/internal/instrumentation"
 	"github.com/htwr-aachen/backend/internal/metrics"
 	"github.com/htwr-aachen/backend/internal/server"
 	"github.com/knadh/koanf/providers/posflag"
@@ -68,6 +69,25 @@ Examples:
 		if err != nil {
 			return fmt.Errorf("loading & validating configuration: %w", err)
 		}
+
+		cfg, ok := configurator.FromContext(ctx)
+		if !ok {
+			return fmt.Errorf("no configuration in context")
+		}
+
+		// Initialize OpenTelemetry
+		im, err := instrumentation.Start(ctx, &cfg.Global.OpenTelemetry, cfg.Global.OpenTelemetry.ServiceName)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to initialize OpenTelemetry")
+		} else if cfg.Global.OpenTelemetry.Enabled {
+			log.Info().Msg("OpenTelemetry initialized")
+			defer func() {
+				if err := im.Shutdown(ctx); err != nil {
+					log.Error().Err(err).Msg("error shutting down OpenTelemetry")
+				}
+			}()
+		}
+		ctx = instrumentation.AttachToContext(ctx, im)
 
 		ctx, err = metrics.CreateAndAttach(ctx)
 		if err != nil {

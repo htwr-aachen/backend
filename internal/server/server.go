@@ -20,6 +20,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -83,7 +84,8 @@ func (s *Server) setup(ctx context.Context) error {
 
 	// setup Routers
 	publicRouter := s.setupPublicRouter()
-	adminRouter := s.setupAdminRouter()
+	adminRouterBase := s.setupAdminRouter()
+	adminRouter := otelhttp.NewHandler(adminRouterBase, "admin-api")
 	metricsRouter := s.setupMetricsRouter()
 
 	publicAddr := net.JoinHostPort(s.cfg.Public.Host, strconv.Itoa(s.cfg.Public.Port))

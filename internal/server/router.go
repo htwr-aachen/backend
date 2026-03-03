@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func (s *Server) setupPublicRouter() http.Handler {
@@ -17,7 +18,7 @@ func (s *Server) setupPublicRouter() http.Handler {
 		log.Debug().Msg("Enabling QA routes")
 		r.Handle("/api/qa/", http.StripPrefix("/api/qa", s.services.QA))
 	}
-	return r
+	return otelhttp.NewHandler(r, "public-api")
 }
 
 func (s *Server) setupAdminRouter() *http.ServeMux {
@@ -28,10 +29,10 @@ func (s *Server) setupAdminRouter() *http.ServeMux {
 	return r
 }
 
-func (s *Server) setupMetricsRouter() *mux.Router {
+func (s *Server) setupMetricsRouter() http.Handler {
 	r := mux.NewRouter()
 	r.Handle("/metrics", promhttp.Handler())
 	r.HandleFunc("/livez", s.services.Liveness.LivezHandler)
 	r.HandleFunc("/readyz", s.services.Liveness.ReadyzHandler)
-	return r
+	return otelhttp.NewHandler(r, "metrics")
 }

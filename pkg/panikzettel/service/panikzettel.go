@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/htwr-aachen/backend/pkg/config"
+	"github.com/htwr-aachen/backend/pkg/panikzettel/downloads"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/models"
 	"github.com/patrickmn/go-cache"
 	"github.com/prometheus/client_golang/prometheus"
@@ -41,20 +42,70 @@ var (
 )
 
 type PanikzettelDB struct {
-	bucket *blob.Bucket
-	cache  *cache.Cache
-	cfg    *config.Panikzettel
+	bucket    *blob.Bucket
+	cache     *cache.Cache
+	cfg       *config.Panikzettel
+	downloads *downloads.Tracker
 }
 
-func New(cfg *config.Config, bucket *blob.Bucket) *PanikzettelDB {
+// New creates the panikzettel service. A nil tracker disables download
+// counting.
+func New(cfg *config.Config, bucket *blob.Bucket, tracker *downloads.Tracker) *PanikzettelDB {
 	return &PanikzettelDB{
-		cfg:    &cfg.Panikzettel,
-		bucket: bucket,
-		cache:  cache.New(cfg.Panikzettel.CacheDuration, cfg.Panikzettel.CacheCleanupInterval),
+		cfg:       &cfg.Panikzettel,
+		bucket:    bucket,
+		cache:     cache.New(cfg.Panikzettel.CacheDuration, cfg.Panikzettel.CacheCleanupInterval),
+		downloads: tracker,
 	}
 }
 
+// GetPanikzettelMeta returns the metadata of all panikzettel, enriched with
+// their download counts.
 func (db *PanikzettelDB) GetPanikzettelMeta(ctx context.Context) ([]models.PanikzettelMeta, error) {
+	metas, err := db.panikzettelMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return db.withDownloads(ctx, metas), nil
+}
+
+// GetDownloadStats returns the download counters of all panikzettel ever
+// downloaded, most downloaded first.
+func (db *PanikzettelDB) GetDownloadStats(ctx context.Context) ([]models.DownloadStat, error) {
+	return db.downloads.Stats(ctx)
+}
+
+// withDownloads copies the metas and annotates them with their current
+// download count. The metas are returned unannotated if the counts are
+// unavailable, since the metadata itself is still perfectly usable.
+func (db *PanikzettelDB) withDownloads(ctx context.Context, metas []models.PanikzettelMeta) []models.PanikzettelMeta {
+	if db.downloads == nil {
+		return metas
+	}
+
+	counts, err := db.downloads.Counts(ctx)
+	if err != nil {
+		log.Err(err).Msg("could not load panikzettel download counts, serving metadata without them")
+		return metas
+	}
+
+	// The cached metas are shared between requests, so the counts must not be
+	// written into them.
+	enriched := make([]models.PanikzettelMeta, len(metas))
+	copy(enriched, metas)
+
+	for i := range enriched {
+		count := counts[enriched[i].Filename]
+		enriched[i].Downloads = &count
+	}
+
+	return enriched
+}
+
+// panikzettelMeta returns the cached metadata as stored in the bucket, without
+// any download counts.
+func (db *PanikzettelDB) panikzettelMeta(ctx context.Context) ([]models.PanikzettelMeta, error) {
 
 	panikzettelMetadataDownloads.Inc()
 	cached, found := db.cache.Get(db.cfg.MetadataFilename)
@@ -127,7 +178,7 @@ func (db *PanikzettelDB) GetPanikzettelMeta(ctx context.Context) ([]models.Panik
 }
 
 func (db *PanikzettelDB) panikzettelExistsInMeta(ctx context.Context, name string) (bool, error) {
-	metas, err := db.GetPanikzettelMeta(ctx)
+	metas, err := db.panikzettelMeta(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -156,6 +207,7 @@ func (db *PanikzettelDB) GetPanikzettel(ctx context.Context, name string) (*mode
 
 	if found {
 		panikzettelDownloadsVec.With(prometheus.Labels{"panikzettel_name": name, "outcome": "cached"}).Inc()
+		db.downloads.Record(name)
 		return cached.(*models.Panikzettel), nil
 	}
 
@@ -175,6 +227,7 @@ func (db *PanikzettelDB) GetPanikzettel(ctx context.Context, name string) (*mode
 
 	if found {
 		panikzettelDownloadsVec.With(prometheus.Labels{"panikzettel_name": name, "outcome": "cached"}).Inc()
+		db.downloads.Record(name)
 		return cached.(*models.Panikzettel), nil
 	}
 
@@ -222,6 +275,7 @@ func (db *PanikzettelDB) GetPanikzettel(ctx context.Context, name string) (*mode
 
 	db.cache.Set(name, panikzettel, cache.DefaultExpiration)
 	panikzettelDownloadsVec.With(prometheus.Labels{"panikzettel_name": name, "outcome": "success"}).Inc()
+	db.downloads.Record(name)
 
 	return panikzettel, nil
 }

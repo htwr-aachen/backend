@@ -10,6 +10,8 @@ import (
 	"github.com/htwr-aachen/backend/internal/metrics"
 	"github.com/htwr-aachen/backend/pkg/config"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/cloud"
+	panikzetteldb "github.com/htwr-aachen/backend/pkg/panikzettel/db"
+	"github.com/htwr-aachen/backend/pkg/panikzettel/downloads"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/handlers"
 	"github.com/htwr-aachen/backend/pkg/panikzettel/service"
 	"github.com/rs/cors"
@@ -45,10 +47,28 @@ func Init(ctx context.Context) (http.Handler, func(), error) {
 		return nil, nil, fmt.Errorf("failed setting up cloud connection: %w", err)
 	}
 
-	db := service.New(gcfg, cloudClient.Bucket())
+	// A nil tracker keeps the download counting out of the request path
+	// entirely, so the subsystem stays usable without a database.
+	var tracker *downloads.Tracker
+	if cfg.Downloads.Enabled {
+		store, err := panikzetteldb.New(ctx)
+		if err != nil {
+			cloudClient.Close()
+			return nil, nil, fmt.Errorf("initializing panikzettel download tracking: %w", err)
+		}
+
+		tracker = downloads.NewTracker(store, &cfg.Downloads)
+	} else {
+		log.Info().Str("subsystem", "panikzettel").Msg("download tracking disabled")
+	}
+
+	db := service.New(gcfg, cloudClient.Bucket(), tracker)
 	panikHandler := handlers.NewPanikzettel(db, cfg)
 	r := http.NewServeMux()
 	r.HandleFunc("GET /", panikHandler.GetPanikzettelMeta)
+	if cfg.Downloads.Enabled {
+		r.HandleFunc("GET /stats/downloads", panikHandler.GetDownloadStats)
+	}
 	r.HandleFunc("GET /{filename}", panikHandler.GetPanikzettel)
 
 	var handler http.Handler
@@ -71,6 +91,8 @@ func Init(ctx context.Context) (http.Handler, func(), error) {
 	handler = httputils.LogMiddleware(handler)
 
 	closer := func() {
+		// Persist the buffered download counts before dropping the service.
+		tracker.Close()
 		cloudClient.Close()
 	}
 	return handler, closer, nil

@@ -33,7 +33,7 @@ var gcfg = config.Config{
 func setupTest(t *testing.T) (*blob.Bucket, *PanikzettelDB) {
 
 	bucket := memblob.OpenBucket(nil)
-	db := New(&gcfg, bucket)
+	db := New(&gcfg, bucket, nil)
 
 	assert.NotNil(t, db)
 	assert.NotNil(t, db.bucket)
@@ -336,7 +336,7 @@ func TestCacheDuration(t *testing.T) {
 	}
 
 	bucket := memblob.OpenBucket(nil)
-	db := New(&gcfg, bucket)
+	db := New(&gcfg, bucket, nil)
 
 	// Verify cache was created with correct duration
 	assert.NotNil(t, db.cache)

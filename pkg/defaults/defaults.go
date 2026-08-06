@@ -100,6 +100,11 @@ func GetDefaultConfig() *config.Config {
 				Provider:   "aws",
 				AuthMethod: "default",
 			},
+			Downloads: config.PanikzettelDownloads{
+				Enabled:       true,
+				FlushInterval: 30 * time.Second,
+				FlushTimeout:  10 * time.Second,
+			},
 		},
 
 		MetricsServer: config.MetricsServer{

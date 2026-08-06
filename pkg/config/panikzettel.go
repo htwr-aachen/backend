@@ -33,18 +33,29 @@ type CloudConfig struct {
 	TLSConfig          ConnectionTLSConfig `koanf:"tls"`
 }
 
+// PanikzettelDownloads configures the persisted download counters.
+type PanikzettelDownloads struct {
+	Enabled bool `koanf:"enabled"`
+	// FlushInterval is how often buffered download counts are written to the
+	// database. Counts of at most one interval are lost on an unclean shutdown.
+	FlushInterval time.Duration `koanf:"flush_interval" validate:"omitempty"`
+	// FlushTimeout bounds a single write of the buffered counts.
+	FlushTimeout time.Duration `koanf:"flush_timeout" validate:"omitempty"`
+}
+
 type Panikzettel struct {
-	Enabled              bool          `koanf:"enabled"`
-	AutoDownload         bool          `koanf:"auto_download"`
-	Metrics              Metrics       `koanf:"metrics"`
-	BaseURL              string        `koanf:"base_url"`
-	BaseURLFile          string        `koanf:"base_url_file"`
-	MetadataFilename     string        `koanf:"metadata_filename"`
-	MetadataFilenameFile string        `koanf:"metadata_filename_file"`
-	MaxFileSize          int64         `koanf:"max_file_size"`
-	CacheDuration        time.Duration `koanf:"cache_duration"`
-	CacheCleanupInterval time.Duration `koanf:"cache_cleanup_interval" validate:"omitempty"`
-	CloudConfig          CloudConfig   `koanf:"cloud"`
+	Enabled              bool                 `koanf:"enabled"`
+	AutoDownload         bool                 `koanf:"auto_download"`
+	Metrics              Metrics              `koanf:"metrics"`
+	BaseURL              string               `koanf:"base_url"`
+	BaseURLFile          string               `koanf:"base_url_file"`
+	MetadataFilename     string               `koanf:"metadata_filename"`
+	MetadataFilenameFile string               `koanf:"metadata_filename_file"`
+	MaxFileSize          int64                `koanf:"max_file_size"`
+	CacheDuration        time.Duration        `koanf:"cache_duration"`
+	CacheCleanupInterval time.Duration        `koanf:"cache_cleanup_interval" validate:"omitempty"`
+	CloudConfig          CloudConfig          `koanf:"cloud"`
+	Downloads            PanikzettelDownloads `koanf:"downloads"`
 }
 
 // Validate performs custom validation on CloudConfig

@@ -15,6 +15,7 @@ import (
 type PanikzettelDB interface {
 	GetPanikzettelMeta(ctx context.Context) ([]models.PanikzettelMeta, error)
 	GetPanikzettel(ctx context.Context, name string) (*models.Panikzettel, error)
+	GetDownloadStats(ctx context.Context) ([]models.DownloadStat, error)
 }
 
 type Panikzettel struct {
@@ -43,6 +44,23 @@ func (h *Panikzettel) GetPanikzettelMeta(w http.ResponseWriter, r *http.Request)
 	encoder := json.NewEncoder(w)
 	if err = encoder.Encode(panikzettel); err != nil {
 		log.Err(err).Msg("Could not encode Panizettel Metadata")
+	}
+}
+
+// GetDownloadStats handles the GET /panikzettel/stats/downloads request and
+// returns the download counters of all panikzettel, most downloaded first.
+func (h *Panikzettel) GetDownloadStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.db.GetDownloadStats(r.Context())
+	if err != nil {
+		log.Err(err).Msg("Could not get Panikzettel download stats")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	encoder := json.NewEncoder(w)
+	if err = encoder.Encode(stats); err != nil {
+		log.Err(err).Msg("Could not encode Panikzettel download stats")
 	}
 }
 

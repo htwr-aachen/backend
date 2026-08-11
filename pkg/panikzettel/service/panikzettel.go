@@ -60,7 +60,7 @@ func New(cfg *config.Config, bucket *blob.Bucket, tracker *downloads.Tracker) *P
 }
 
 // GetPanikzettelMeta returns the metadata of all panikzettel, enriched with
-// their download counts of the running semester.
+// their download counts.
 func (db *PanikzettelDB) GetPanikzettelMeta(ctx context.Context) ([]models.PanikzettelMeta, error) {
 	metas, err := db.panikzettelMeta(ctx)
 	if err != nil {
@@ -71,13 +71,13 @@ func (db *PanikzettelDB) GetPanikzettelMeta(ctx context.Context) ([]models.Panik
 }
 
 // GetDownloadStats returns the download counters of all panikzettel downloaded
-// in the running semester, most downloaded first.
+// in the running semester, most downloaded this semester first.
 func (db *PanikzettelDB) GetDownloadStats(ctx context.Context) ([]models.DownloadStat, error) {
 	return db.downloads.Stats(ctx)
 }
 
-// withDownloads copies the metas and annotates them with their download count
-// of the running semester. The metas are returned unannotated if the counts are
+// withDownloads copies the metas and annotates them with their download counts.
+// The metas are returned unannotated if the counts are
 // unavailable, since the metadata itself is still perfectly usable.
 func (db *PanikzettelDB) withDownloads(ctx context.Context, metas []models.PanikzettelMeta) []models.PanikzettelMeta {
 	if db.downloads == nil {

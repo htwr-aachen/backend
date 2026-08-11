@@ -33,14 +33,15 @@ var (
 // Store persists the download counters.
 type Store interface {
 	IncrementDownloads(ctx context.Context, deltas []models.DownloadDelta) error
-	ListDownloads(ctx context.Context, semester string) ([]models.DownloadStat, error)
+	ListDownloads(ctx context.Context, windows models.DownloadWindows) ([]models.DownloadStat, error)
 }
 
-// key counts a panikzettel separately per semester, so a buffer spanning a
-// semester boundary is still attributed correctly.
+// key counts a panikzettel separately per day, so a buffer spanning midnight is
+// still attributed correctly. days are always models.Day values, which makes
+// them comparable as map keys.
 type key struct {
 	filename string
-	semester string
+	day      time.Time
 }
 
 type pending struct {
@@ -84,14 +85,14 @@ func NewTracker(store Store, cfg *config.PanikzettelDownloads) *Tracker {
 	return t
 }
 
-// Record counts a single served panikzettel towards the running semester.
+// Record counts a single served panikzettel.
 func (t *Tracker) Record(filename string) {
 	if t == nil || filename == "" {
 		return
 	}
 
 	now := time.Now()
-	k := key{filename: filename, semester: models.SemesterAt(now)}
+	k := key{filename: filename, day: models.Day(now)}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -106,67 +107,75 @@ func (t *Tracker) Record(filename string) {
 	downloadsPending.Set(float64(len(t.pending)))
 }
 
-// Stats returns the download counters of the running semester including
-// everything not yet flushed, most downloaded first.
+// Stats returns the download counters over the reported windows, including
+// everything not yet flushed, most downloaded this semester first.
 func (t *Tracker) Stats(ctx context.Context) ([]models.DownloadStat, error) {
 	if t == nil {
 		return []models.DownloadStat{}, nil
 	}
 
-	semester := models.CurrentSemester()
+	now := time.Now()
+	windows := models.DownloadWindowsAt(now)
 
-	stored, err := t.store.ListDownloads(ctx, semester)
+	stored, err := t.store.ListDownloads(ctx, windows)
 	if err != nil {
 		return nil, err
 	}
 
 	t.mu.Lock()
-	buffered := make(map[string]pending, len(t.pending))
+	buffered := make(map[key]pending, len(t.pending))
 	for k, entry := range t.pending {
-		if k.semester == semester {
-			buffered[k.filename] = *entry
-		}
+		buffered[k] = *entry
 	}
 	t.mu.Unlock()
 
+	semester := models.SemesterAt(now)
+
+	byFilename := make(map[string]*models.DownloadStat, len(stored)+len(buffered))
 	for i := range stored {
-		entry, ok := buffered[stored[i].Filename]
+		stat := stored[i]
+		stat.Semester = semester
+		byFilename[stat.Filename] = &stat
+	}
+
+	for k, entry := range buffered {
+		stat, ok := byFilename[k.filename]
 		if !ok {
-			continue
+			// Panikzettel downloaded for the very first time are not in the db yet.
+			stat = &models.DownloadStat{
+				Filename:        k.filename,
+				Semester:        semester,
+				FirstDownloadAt: entry.first,
+				LastDownloadAt:  entry.last,
+			}
+			byFilename[k.filename] = stat
 		}
-		delete(buffered, stored[i].Filename)
 
-		stored[i].Downloads += entry.count
-		if entry.last.After(stored[i].LastDownloadAt) {
-			stored[i].LastDownloadAt = entry.last
+		windows.Add(&stat.Downloads, k.day, entry.count)
+		if entry.last.After(stat.LastDownloadAt) {
+			stat.LastDownloadAt = entry.last
 		}
 	}
 
-	// Panikzettel downloaded for the very first time are not in the db yet.
-	for filename, entry := range buffered {
-		stored = append(stored, models.DownloadStat{
-			Filename:        filename,
-			Semester:        semester,
-			Downloads:       entry.count,
-			FirstDownloadAt: entry.first,
-			LastDownloadAt:  entry.last,
-		})
+	stats := make([]models.DownloadStat, 0, len(byFilename))
+	for _, stat := range byFilename {
+		stats = append(stats, *stat)
 	}
 
-	sortStats(stored)
+	sortStats(stats)
 
-	return stored, nil
+	return stats, nil
 }
 
-// Counts returns the download count per filename in the running semester,
-// including everything not yet flushed.
-func (t *Tracker) Counts(ctx context.Context) (map[string]int64, error) {
+// Counts returns the download counts per filename, including everything not yet
+// flushed.
+func (t *Tracker) Counts(ctx context.Context) (map[string]models.DownloadCounts, error) {
 	stats, err := t.Stats(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	counts := make(map[string]int64, len(stats))
+	counts := make(map[string]models.DownloadCounts, len(stats))
 	for _, stat := range stats {
 		counts[stat.Filename] = stat.Downloads
 	}
@@ -220,7 +229,7 @@ func (t *Tracker) flush() {
 	for k, entry := range buffered {
 		deltas = append(deltas, models.DownloadDelta{
 			Filename:        k.filename,
-			Semester:        k.semester,
+			Day:             k.day,
 			Count:           entry.count,
 			FirstDownloadAt: entry.first,
 			LastDownloadAt:  entry.last,
@@ -264,12 +273,12 @@ func (t *Tracker) restore(buffered map[key]*pending) {
 	downloadsPending.Set(float64(len(t.pending)))
 }
 
-// sortStats orders the stats like the db does: most downloaded first, ties
-// broken by filename so the api response stays stable.
+// sortStats orders the stats like the db does: most downloaded this semester
+// first, ties broken by filename so the api response stays stable.
 func sortStats(stats []models.DownloadStat) {
 	slices.SortFunc(stats, func(a, b models.DownloadStat) int {
-		if a.Downloads != b.Downloads {
-			return cmp.Compare(b.Downloads, a.Downloads)
+		if a.Downloads.Semester != b.Downloads.Semester {
+			return cmp.Compare(b.Downloads.Semester, a.Downloads.Semester)
 		}
 		return cmp.Compare(a.Filename, b.Filename)
 	})

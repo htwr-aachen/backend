@@ -35,10 +35,13 @@ func (s *fakeStore) IncrementDownloads(_ context.Context, deltas []models.Downlo
 
 	s.flushes++
 	for _, delta := range deltas {
-		stat, ok := s.stats[delta.Filename]
+		k := delta.Filename + "/" + delta.Semester
+
+		stat, ok := s.stats[k]
 		if !ok {
-			s.stats[delta.Filename] = models.DownloadStat{
+			s.stats[k] = models.DownloadStat{
 				Filename:        delta.Filename,
+				Semester:        delta.Semester,
 				Downloads:       delta.Count,
 				FirstDownloadAt: delta.FirstDownloadAt,
 				LastDownloadAt:  delta.LastDownloadAt,
@@ -50,13 +53,13 @@ func (s *fakeStore) IncrementDownloads(_ context.Context, deltas []models.Downlo
 		if delta.LastDownloadAt.After(stat.LastDownloadAt) {
 			stat.LastDownloadAt = delta.LastDownloadAt
 		}
-		s.stats[delta.Filename] = stat
+		s.stats[k] = stat
 	}
 
 	return nil
 }
 
-func (s *fakeStore) ListDownloads(_ context.Context) ([]models.DownloadStat, error) {
+func (s *fakeStore) ListDownloads(_ context.Context, semester string) ([]models.DownloadStat, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -66,7 +69,9 @@ func (s *fakeStore) ListDownloads(_ context.Context) ([]models.DownloadStat, err
 
 	stats := make([]models.DownloadStat, 0, len(s.stats))
 	for _, stat := range s.stats {
-		stats = append(stats, stat)
+		if stat.Semester == semester {
+			stats = append(stats, stat)
+		}
 	}
 	sortStats(stats)
 
@@ -82,7 +87,7 @@ func (s *fakeStore) setError(err error) {
 func (s *fakeStore) count(filename string) int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.stats[filename].Downloads
+	return s.stats[filename+"/"+models.CurrentSemester()].Downloads
 }
 
 // newTestTracker creates a tracker that only flushes when explicitly asked to,
@@ -157,6 +162,32 @@ func TestTrackerStatsIncludeUnflushedCounts(t *testing.T) {
 	counts, err := tracker.Counts(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]int64{"math101.pdf": 2, "phys201.pdf": 1}, counts)
+
+	tracker.Close()
+}
+
+func TestTrackerStatsOnlyCoverTheRunningSemester(t *testing.T) {
+	store := newFakeStore()
+	tracker := newTestTracker(store)
+	ctx := context.Background()
+
+	previous := models.SemesterAt(time.Now().AddDate(0, -6, 0))
+	require.NoError(t, store.IncrementDownloads(ctx, []models.DownloadDelta{
+		{Filename: "math101.pdf", Semester: previous, Count: 42, FirstDownloadAt: time.Now(), LastDownloadAt: time.Now()},
+	}))
+
+	tracker.Record("math101.pdf")
+	tracker.flush()
+
+	stats, err := tracker.Stats(ctx)
+	require.NoError(t, err)
+	require.Len(t, stats, 1)
+	assert.Equal(t, models.CurrentSemester(), stats[0].Semester)
+	assert.Equal(t, int64(1), stats[0].Downloads)
+
+	counts, err := tracker.Counts(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]int64{"math101.pdf": 1}, counts)
 
 	tracker.Close()
 }

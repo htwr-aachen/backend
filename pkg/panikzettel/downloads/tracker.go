@@ -33,7 +33,14 @@ var (
 // Store persists the download counters.
 type Store interface {
 	IncrementDownloads(ctx context.Context, deltas []models.DownloadDelta) error
-	ListDownloads(ctx context.Context) ([]models.DownloadStat, error)
+	ListDownloads(ctx context.Context, semester string) ([]models.DownloadStat, error)
+}
+
+// key counts a panikzettel separately per semester, so a buffer spanning a
+// semester boundary is still attributed correctly.
+type key struct {
+	filename string
+	semester string
 }
 
 type pending struct {
@@ -53,7 +60,7 @@ type Tracker struct {
 	flushTimeout  time.Duration
 
 	mu      sync.Mutex
-	pending map[string]*pending
+	pending map[key]*pending
 
 	stop     chan struct{}
 	done     chan struct{}
@@ -67,7 +74,7 @@ func NewTracker(store Store, cfg *config.PanikzettelDownloads) *Tracker {
 		store:         store,
 		flushInterval: cfg.FlushInterval,
 		flushTimeout:  cfg.FlushTimeout,
-		pending:       make(map[string]*pending),
+		pending:       make(map[key]*pending),
 		stop:          make(chan struct{}),
 		done:          make(chan struct{}),
 	}
@@ -77,43 +84,48 @@ func NewTracker(store Store, cfg *config.PanikzettelDownloads) *Tracker {
 	return t
 }
 
-// Record counts a single served panikzettel.
+// Record counts a single served panikzettel towards the running semester.
 func (t *Tracker) Record(filename string) {
 	if t == nil || filename == "" {
 		return
 	}
 
 	now := time.Now()
+	k := key{filename: filename, semester: models.SemesterAt(now)}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if entry, ok := t.pending[filename]; ok {
+	if entry, ok := t.pending[k]; ok {
 		entry.count++
 		entry.last = now
 		return
 	}
 
-	t.pending[filename] = &pending{count: 1, first: now, last: now}
+	t.pending[k] = &pending{count: 1, first: now, last: now}
 	downloadsPending.Set(float64(len(t.pending)))
 }
 
-// Stats returns the download counters including everything not yet flushed,
-// most downloaded first.
+// Stats returns the download counters of the running semester including
+// everything not yet flushed, most downloaded first.
 func (t *Tracker) Stats(ctx context.Context) ([]models.DownloadStat, error) {
 	if t == nil {
 		return []models.DownloadStat{}, nil
 	}
 
-	stored, err := t.store.ListDownloads(ctx)
+	semester := models.CurrentSemester()
+
+	stored, err := t.store.ListDownloads(ctx, semester)
 	if err != nil {
 		return nil, err
 	}
 
 	t.mu.Lock()
 	buffered := make(map[string]pending, len(t.pending))
-	for filename, entry := range t.pending {
-		buffered[filename] = *entry
+	for k, entry := range t.pending {
+		if k.semester == semester {
+			buffered[k.filename] = *entry
+		}
 	}
 	t.mu.Unlock()
 
@@ -134,6 +146,7 @@ func (t *Tracker) Stats(ctx context.Context) ([]models.DownloadStat, error) {
 	for filename, entry := range buffered {
 		stored = append(stored, models.DownloadStat{
 			Filename:        filename,
+			Semester:        semester,
 			Downloads:       entry.count,
 			FirstDownloadAt: entry.first,
 			LastDownloadAt:  entry.last,
@@ -145,8 +158,8 @@ func (t *Tracker) Stats(ctx context.Context) ([]models.DownloadStat, error) {
 	return stored, nil
 }
 
-// Counts returns the download count per filename, including everything not yet
-// flushed.
+// Counts returns the download count per filename in the running semester,
+// including everything not yet flushed.
 func (t *Tracker) Counts(ctx context.Context) (map[string]int64, error) {
 	stats, err := t.Stats(ctx)
 	if err != nil {
@@ -195,7 +208,7 @@ func (t *Tracker) run() {
 func (t *Tracker) flush() {
 	t.mu.Lock()
 	buffered := t.pending
-	t.pending = make(map[string]*pending)
+	t.pending = make(map[key]*pending)
 	downloadsPending.Set(0)
 	t.mu.Unlock()
 
@@ -204,9 +217,10 @@ func (t *Tracker) flush() {
 	}
 
 	deltas := make([]models.DownloadDelta, 0, len(buffered))
-	for filename, entry := range buffered {
+	for k, entry := range buffered {
 		deltas = append(deltas, models.DownloadDelta{
-			Filename:        filename,
+			Filename:        k.filename,
+			Semester:        k.semester,
 			Count:           entry.count,
 			FirstDownloadAt: entry.first,
 			LastDownloadAt:  entry.last,
@@ -227,14 +241,14 @@ func (t *Tracker) flush() {
 }
 
 // restore merges counts of a failed flush back into the pending buffer.
-func (t *Tracker) restore(buffered map[string]*pending) {
+func (t *Tracker) restore(buffered map[key]*pending) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	for filename, entry := range buffered {
-		current, ok := t.pending[filename]
+	for k, entry := range buffered {
+		current, ok := t.pending[k]
 		if !ok {
-			t.pending[filename] = entry
+			t.pending[k] = entry
 			continue
 		}
 

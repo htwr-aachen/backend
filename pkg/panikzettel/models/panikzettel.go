@@ -20,14 +20,17 @@ type PanikzettelMeta struct {
 	URL       string `json:"url"`
 	Semester  int    `json:"semester,omitempty"`
 	Date      string `json:"date"`
-	// Downloads is nil while download tracking is disabled, so the field is
-	// omitted instead of reporting a bogus zero count.
+	// Downloads counts the downloads of the running semester. It is nil while
+	// download tracking is disabled, so the field is omitted instead of
+	// reporting a bogus zero count.
 	Downloads *int64 `json:"downloads,omitempty"`
 }
 
-// DownloadStat is the persisted download counter of a single panikzettel.
+// DownloadStat is the persisted download counter of a single panikzettel in a
+// single semester.
 type DownloadStat struct {
 	Filename        string    `json:"filename"`
+	Semester        string    `json:"semester"`
 	Downloads       int64     `json:"downloads"`
 	FirstDownloadAt time.Time `json:"first_download_at"`
 	LastDownloadAt  time.Time `json:"last_download_at"`
@@ -37,6 +40,7 @@ type DownloadStat struct {
 // to be folded into the persisted counters.
 type DownloadDelta struct {
 	Filename        string
+	Semester        string
 	Count           int64
 	FirstDownloadAt time.Time
 	LastDownloadAt  time.Time

@@ -48,7 +48,7 @@ func (h *Panikzettel) GetPanikzettelMeta(w http.ResponseWriter, r *http.Request)
 }
 
 // GetDownloadStats handles the GET /panikzettel/stats/downloads request and
-// returns the download counters of all panikzettel, most downloaded first.
+// returns the download counters of the running semester, most downloaded first.
 func (h *Panikzettel) GetDownloadStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.db.GetDownloadStats(r.Context())
 	if err != nil {

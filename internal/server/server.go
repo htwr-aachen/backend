@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -48,8 +49,8 @@ type Services struct {
 
 // Close cleanly shuts down all services
 func (s *Services) Close() {
-	for i := len(s.closers) - 1; i >= 0; i-- {
-		s.closers[i]()
+	for _, v := range slices.Backward(s.closers) {
+		v()
 	}
 }
 

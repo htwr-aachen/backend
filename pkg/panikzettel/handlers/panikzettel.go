@@ -70,8 +70,7 @@ func (h *Panikzettel) GetPanikzettel(w http.ResponseWriter, r *http.Request) {
 
 	panikzettel, err := h.db.GetPanikzettel(r.Context(), filename)
 	if err != nil {
-		var notFoundErr *models.PanikzettelNotFoundError
-		if errors.As(err, &notFoundErr) {
+		if _, ok := errors.AsType[*models.PanikzettelNotFoundError](err); ok {
 			log.Warn().Str("filename", filename).Msg("Unknown Panikzettel Requested")
 			http.Error(w, "Not Found", http.StatusNotFound)
 		} else {

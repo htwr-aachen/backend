@@ -48,7 +48,7 @@ func loadProvidersFromEnv(conf *koanf.Koanf, cfg *config.Session) error {
 		return nil
 	}
 
-	for _, name := range strings.Split(providerNames, ",") {
+	for name := range strings.SplitSeq(providerNames, ",") {
 		name := strings.TrimSpace(name)
 		if name == "" {
 			continue

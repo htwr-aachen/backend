@@ -41,7 +41,7 @@ func (r UserRole) Value() (driver.Value, error) {
 }
 
 // Implement sql.Scanner to decode from database
-func (r *UserRole) Scan(value interface{}) error {
+func (r *UserRole) Scan(value any) error {
 	if value == nil {
 		*r = ROLE_USER
 		return nil

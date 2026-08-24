@@ -186,7 +186,7 @@ func TestReadinessManager_ParallelVsSequential(t *testing.T) {
 		rm := NewReadinessManager() // parallel by default
 
 		// Add checks that take 100ms each
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			name := "check" + string(rune('0'+i))
 			check := NewCustomReadinessCheck(name, func(ctx context.Context) error {
 				time.Sleep(100 * time.Millisecond)
@@ -209,7 +209,7 @@ func TestReadinessManager_ParallelVsSequential(t *testing.T) {
 		rm := NewReadinessManager(WithSequentialChecks())
 
 		// Add checks that take 50ms each
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			name := "check" + string(rune('0'+i))
 			check := NewCustomReadinessCheck(name, func(ctx context.Context) error {
 				time.Sleep(50 * time.Millisecond)
@@ -249,7 +249,7 @@ func TestLivenessServer_ReadyzHandler(t *testing.T) {
 			t.Errorf("expected status 200, got %d", resp.StatusCode)
 		}
 
-		var response map[string]interface{}
+		var response map[string]any
 		json.NewDecoder(resp.Body).Decode(&response)
 
 		if response["status"] != "ready" {
@@ -276,22 +276,22 @@ func TestLivenessServer_ReadyzHandler(t *testing.T) {
 			t.Errorf("expected status 503, got %d", resp.StatusCode)
 		}
 
-		var response map[string]interface{}
+		var response map[string]any
 		json.NewDecoder(resp.Body).Decode(&response)
 
 		if response["status"] != "not ready" {
 			t.Errorf("expected status 'not ready', got '%v'", response["status"])
 		}
 
-		if checks, ok := response["checks"].(map[string]interface{}); ok {
+		if checks, ok := response["checks"].(map[string]any); ok {
 			if len(checks) != 2 {
 				t.Errorf("expected 2 checks, got %d", len(checks))
 			}
-			check1 := checks["check1"].(map[string]interface{})
+			check1 := checks["check1"].(map[string]any)
 			if check1["status"] != string(StatusHealthy) {
 				t.Errorf("expected check1 to be healthy, got %s", check1["status"])
 			}
-			check2 := checks["check2"].(map[string]interface{})
+			check2 := checks["check2"].(map[string]any)
 			if check2["status"] != string(StatusUnhealthy) {
 				t.Errorf("expected check2 to be unhealthy, got %s", check2["status"])
 			}
@@ -314,14 +314,14 @@ func TestLivenessServer_ReadyzHandler(t *testing.T) {
 		resp := w.Result()
 		defer resp.Body.Close()
 
-		var response map[string]interface{}
+		var response map[string]any
 		json.NewDecoder(resp.Body).Decode(&response)
 
-		if checks, ok := response["checks"].(map[string]interface{}); ok {
+		if checks, ok := response["checks"].(map[string]any); ok {
 			if len(checks) != 1 {
 				t.Errorf("expected 1 check, got %d", len(checks))
 			}
-			check1 := checks["check1"].(map[string]interface{})
+			check1 := checks["check1"].(map[string]any)
 			if check1["status"] != string(StatusHealthy) {
 				t.Errorf("expected check1 to be healthy, got %s", check1["status"])
 			}
@@ -344,14 +344,14 @@ func TestLivenessServer_ReadyzHandler(t *testing.T) {
 		resp := w.Result()
 		defer resp.Body.Close()
 
-		var response map[string]interface{}
+		var response map[string]any
 		json.NewDecoder(resp.Body).Decode(&response)
 
-		if checks, ok := response["checks"].(map[string]interface{}); ok {
+		if checks, ok := response["checks"].(map[string]any); ok {
 			if len(checks) != 1 {
 				t.Errorf("expected 1 check, got %d", len(checks))
 			}
-			check1 := checks["check1"].(map[string]interface{})
+			check1 := checks["check1"].(map[string]any)
 			if check1["status"] != string(StatusUnhealthy) {
 				t.Errorf("expected check1 to be unhealthy, got %s", check1["status"])
 			}

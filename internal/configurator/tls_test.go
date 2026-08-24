@@ -198,10 +198,8 @@ func TestParseTLSVersion(t *testing.T) {
 func TestMergeFromConnConfig(t *testing.T) {
 	t.Run("MinVersion set", func(t *testing.T) {
 		cfg := &config.ConnectionTLSConfig{
-			TLSBaseConfig: config.TLSBaseConfig{
-				MinVersionStr: TLSVersion13,
-				MinVersion:    tls.VersionTLS13,
-			},
+			MinVersionStr: TLSVersion13,
+			MinVersion:    tls.VersionTLS13,
 		}
 		tlsConfig := &tls.Config{}
 
@@ -216,10 +214,8 @@ func TestMergeFromConnConfig(t *testing.T) {
 
 	t.Run("MaxVersion set", func(t *testing.T) {
 		cfg := &config.ConnectionTLSConfig{
-			TLSBaseConfig: config.TLSBaseConfig{
-				MaxVersionStr: TLSVersion12,
-				MaxVersion:    tls.VersionTLS12,
-			},
+			MaxVersionStr: TLSVersion12,
+			MaxVersion:    tls.VersionTLS12,
 		}
 		tlsConfig := &tls.Config{}
 
@@ -234,9 +230,7 @@ func TestMergeFromConnConfig(t *testing.T) {
 
 	t.Run("InsecureSkipVerify set", func(t *testing.T) {
 		cfg := &config.ConnectionTLSConfig{
-			TLSBaseConfig: config.TLSBaseConfig{
-				InsecureSkipVerify: true,
-			},
+			InsecureSkipVerify: true,
 		}
 		tlsConfig := &tls.Config{}
 
@@ -405,12 +399,10 @@ func TestMergeFromConnConfig(t *testing.T) {
 func TestMergeFromGlobalConfig(t *testing.T) {
 	t.Run("MinVersion and MaxVersion set", func(t *testing.T) {
 		cfg := &config.GlobalTLSConfig{
-			TLSBaseConfig: config.TLSBaseConfig{
-				MinVersionStr: TLSVersion12,
-				MinVersion:    tls.VersionTLS12,
-				MaxVersionStr: TLSVersion13,
-				MaxVersion:    tls.VersionTLS13,
-			},
+			MinVersionStr: TLSVersion12,
+			MinVersion:    tls.VersionTLS12,
+			MaxVersionStr: TLSVersion13,
+			MaxVersion:    tls.VersionTLS13,
 		}
 		tlsConfig := &tls.Config{}
 
@@ -555,9 +547,7 @@ func TestMergeFromGlobalConfig(t *testing.T) {
 
 	t.Run("InsecureSkipVerify set", func(t *testing.T) {
 		cfg := &config.GlobalTLSConfig{
-			TLSBaseConfig: config.TLSBaseConfig{
-				InsecureSkipVerify: true,
-			},
+			InsecureSkipVerify: true,
 		}
 		tlsConfig := &tls.Config{}
 

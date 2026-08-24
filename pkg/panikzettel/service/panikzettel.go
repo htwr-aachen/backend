@@ -164,8 +164,8 @@ func (db *PanikzettelDB) panikzettelMeta(ctx context.Context) ([]models.Panikzet
 			Type:      v.Type,
 			Semester:  v.Semester,
 			Date:      v.Date,
-		}
-		meta.URL = fmt.Sprintf("%s/%s", db.cfg.BaseURL, filename)
+
+			URL: fmt.Sprintf("%s/%s", db.cfg.BaseURL, filename)}
 		metas = append(metas, meta)
 	}
 

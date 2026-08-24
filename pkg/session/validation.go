@@ -14,8 +14,7 @@ func validateId(id string) error {
 }
 
 func formatValidationError(err error) error {
-	var validationErrors validator.ValidationErrors
-	if errors.As(err, &validationErrors) {
+	if validationErrors, ok := errors.AsType[validator.ValidationErrors](err); ok {
 		var errMessages []string
 
 		for _, e := range validationErrors {
